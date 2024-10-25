@@ -6,6 +6,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const DbPath = "/var/lib/postbranch/postbranch.db"
+
 func Initialize() *sql.DB {
 	db, err := sql.Open("sqlite3", "/home/jamius19/.postbranch/main.db")
 	if err != nil {
