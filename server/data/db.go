@@ -2,24 +2,26 @@ package data
 
 import (
 	"database/sql"
+	"github.com/jamius19/postbranch/data/fetch"
 	"github.com/jamius19/postbranch/logger"
-	"github.com/jamius19/postbranch/service"
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const DbPath = "/var/lib/postbranch/postbranch.db"
+const dbPath = "/var/lib/postbranch/postbranch.db"
 
 var Db *sql.DB
+var Fetcher *fetch.Queries
 
 func Initialize() *sql.DB {
-	db, err := sql.Open("sqlite3", "/home/jamius19/.postbranch/main.db")
+	var err error
+
+	Db, err = sql.Open("sqlite3", "/home/jamius19/.postbranch/main.db")
 	if err != nil {
 		logger.Logger.Fatal(err)
 	}
 
-	Db = db
-	service.Initialize(db)
+	Fetcher = fetch.New(Db)
 
 	logger.Logger.Info("Initialized database")
-	return db
+	return Db
 }

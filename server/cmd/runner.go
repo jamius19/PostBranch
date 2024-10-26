@@ -42,11 +42,11 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 		output, err := Single(command.Name, command.Args...)
 
 		if err != nil {
-			log.Errorf("Error executing key: %s command: %s args: %s error: %s", el.Key, command.Name, command.Args, err)
+			log.Errorf("Error executing key: %s command: %s args: %s error: %s, output: %v", el.Key, command.Name, command.Args, err, output)
 
 			outputs.Set(el.Key, CommandOutput{
 				Name:   command.Name,
-				Output: nil,
+				Output: output,
 				Error:  err,
 			})
 

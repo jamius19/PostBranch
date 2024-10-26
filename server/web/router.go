@@ -6,12 +6,11 @@ import (
 )
 
 func routes(r *chi.Mux) {
-	r.Route("/api/settings", func(r chi.Router) {
-		r.Post("/", route.AddSettings)
-		r.Get("/{key}", route.GetSettings)
-	})
-
-	r.Route("/api/repo", func(r chi.Router) {
+	r.Route("/api/repos", func(r chi.Router) {
+		r.Get("/", route.ListRepos)
 		r.Post("/", route.InitializeRepo)
+		
+		r.Get("/block-storages", route.ListBlockStorage)
+		//r.Post("/", route.InitializeRepo)
 	})
 }

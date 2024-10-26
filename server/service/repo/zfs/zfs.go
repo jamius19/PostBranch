@@ -20,7 +20,7 @@ var log = logger.Logger
 func Version() (*string, bool) {
 	log.Info("Checking ZFS availability")
 
-	cmd := exec.Command("repo", "--version")
+	cmd := exec.Command("zfs", "--version")
 	output, err := cmd.Output()
 
 	if err != nil {
@@ -40,12 +40,11 @@ func Version() (*string, bool) {
 	return nil, false
 }
 
-func InitializeVirtual(req *dto.Virtual) error {
-	log.Infof("repo data %v", *req)
+func InitializeVirtual(repoinit *dto.RepoInit) error {
+	log.Infof("Repo init data %v", *repoinit)
 
-	_, path := util.SplitPath(req.Path)
-	filesize := fmt.Sprintf("%d%s", req.Size, req.SizeUnit[:1])
-	log.Infof("Creating virtual disk file %s", req.Path)
+	_, path := util.SplitPath(repoinit.Path)
+	log.Infof("Creating virtual disk file at %s", repoinit.Path)
 
 	loopNo, err := findFreeLoopDevice()
 	if err != nil {
@@ -55,18 +54,24 @@ func InitializeVirtual(req *dto.Virtual) error {
 
 	log.Infof("Found free loop device: %d", loopNo)
 
-	loopDevice := fmt.Sprintf("/dev/pb-loop-%d", loopNo)
-	mountPath := fmt.Sprintf("/mnt/%s", req.Name)
+	loopDevice := fmt.Sprintf("/dev/loop%d", loopNo)
+	mountPath := fmt.Sprintf("/mnt/pb-%s", repoinit.Name)
 
+	// Run the Commands
 	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
 	cmds.Set("create-folder", cmd.Get("mkdir", "-p", path))
-	cmds.Set("create-file", cmd.Get("fallocate", "-l", filesize, req.Path))
-	cmds.Set("create-loop-node", cmd.Get("mknod", loopDevice, "b", "7", string(rune(loopNo))))
-	cmds.Set("setup-loopback", cmd.Get("losetup", loopDevice, req.Path))
+
+	filesize := fmt.Sprintf("%d%s", repoinit.Size, repoinit.SizeUnit)
+	cmds.Set("create-file", cmd.Get("fallocate", "-l", filesize, repoinit.Path))
+
+	cmds.Set("create-loop-node", cmd.Get("mknod", loopDevice, "b", "7", fmt.Sprintf("%d", loopNo)))
+	cmds.Set("setup-loopback", cmd.Get("losetup", loopDevice, repoinit.Path))
+
+	//mountPathFlag := fmt.Sprintf("mountpoint=%s", mountPath)
 	cmds.Set(
 		"create-zpool",
 		cmd.Get(
-			"zpool", "create", "-o", fmt.Sprintf("mountpoint=%s", mountPath), req.Name, loopDevice,
+			"zpool", "create", "-m", mountPath, repoinit.Name, loopDevice,
 		),
 	)
 
@@ -77,7 +82,12 @@ func InitializeVirtual(req *dto.Virtual) error {
 	}
 
 	for el := multi.Front(); el != nil; el = el.Next() {
-		log.Infof("%s: %v", el.Key, el.Value.Output)
+		var output = "<nil>"
+		if el.Value.Output != nil && *el.Value.Output != "" {
+			output = *el.Value.Output
+		}
+
+		log.Infof("%s: %v", el.Key, output)
 	}
 
 	return nil

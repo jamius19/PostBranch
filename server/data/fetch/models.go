@@ -38,15 +38,6 @@ type Repo struct {
 	UpdatedAt time.Time
 }
 
-type Setting struct {
-	ID        int64
-	Key       string
-	Value     string
-	Json      sql.NullString
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
 type ZfsDataset struct {
 	ID     int64
 	Name   string
