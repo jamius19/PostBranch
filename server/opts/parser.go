@@ -12,7 +12,7 @@ type Opts struct {
 	} `yaml:"server"`
 }
 
-const DefaultConfigPath = "/etc/postbranch/config.yml"
+const defaultConfigPath = "/etc/postbranch/config.yml"
 
 var Config *Opts
 
@@ -23,7 +23,7 @@ func Load() error {
 		log.Errorf("Config file is not found on %s", flags.configFile)
 		log.Infof(
 			"Usage: postbranch --config-file <config_file> or the default config file at %s",
-			DefaultConfigPath,
+			defaultConfigPath,
 		)
 
 		return err

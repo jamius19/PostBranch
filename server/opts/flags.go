@@ -14,7 +14,7 @@ var log = logger.Logger
 func loadFlags() *flags {
 	log.Info("Loading config")
 
-	configPath := flag.String("config-file", DefaultConfigPath, "Path to config file")
+	configPath := flag.String("config-file", defaultConfigPath, "Path to config file")
 	flag.Parse()
 
 	args := flags{
