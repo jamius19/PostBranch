@@ -41,10 +41,20 @@ func SplitPath(filepath string) (filename string, path string) {
 
 	filename = filepath[lastIndex+1:]
 	path = filepath[:lastIndex+1]
-	
+
 	if len(path) > 1 {
 		path = path[:len(path)-1]
 	}
 
 	return filename, path
+}
+
+func StringVal(str *string) string {
+	var output = "<nil>"
+
+	if str != nil && *str != "" {
+		output = *str
+	}
+
+	return output
 }

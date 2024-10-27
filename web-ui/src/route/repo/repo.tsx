@@ -1,6 +1,5 @@
 import {useQuery} from "@tanstack/react-query";
 import {Link, Navigate, useNavigate} from "react-router-dom";
-import {BeatLoader, CircleLoader, PropagateLoader} from "react-spinners";
 import {listRepos} from "@/service/repo-service.ts";
 import {Button} from "@/components/ui/button.tsx";
 
@@ -16,7 +15,7 @@ const Repo = () => {
 
     if (isPending) {
         return (
-            <BeatLoader color={"#3687d7"}/>
+            <>Loading...</>
         );
     }
 

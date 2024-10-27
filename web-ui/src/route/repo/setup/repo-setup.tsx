@@ -14,32 +14,31 @@ import {
     FormMessage
 } from "@/components/ui/form.tsx";
 import {RepoInitDto, RepoType} from "@/@types/repo-init-dto.ts";
-import {useQuery} from "@tanstack/react-query";
-import {listBlockStorages} from "@/service/repo-service.ts";
+import {useMutation} from "@tanstack/react-query";
+import {initRepo} from "@/service/repo-service.ts";
 import {
     Breadcrumb,
     BreadcrumbItem,
-    BreadcrumbLink,
     BreadcrumbList, BreadcrumbPage,
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
 import {generateName} from '@criblinc/docker-names'
-
+import Spinner from "@/components/Spinner.tsx";
+import {ArrowRight, Check} from "lucide-react";
+import {getRandomInt} from "@/util/lib.ts";
 
 const baseFormSchema = z.object({
     name: z.string()
         .min(1, "Name is required")
-        .regex(/^[a-zA-Z]+(-[a-zA-Z]+)*$/, "Name can only contain alphabets with hyphens in between"),
-    branchName: z.string()
-        .min(1, "Branch Name is required")
-        .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Branch Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens"),
-    path: z.string().min(1, "Path is required"),
+        .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens"),
+    path: z.string()
+        .min(1, "Path is required")
+        .regex(/^\/\S+$/, "Path must start with / and cannot contain spaces"),
 });
-
 const virtualSchema = z.object({
     repoType: z.literal("virtual"),
-    size: z.number().min(1, "Size value must be greater than or equal to 1"),
+    size: z.number().positive("Size value must be greater than 0"),
     sizeUnit: z.enum(["K", "M", "G"])
 });
 
@@ -52,18 +51,25 @@ const formSchema = z.discriminatedUnion("repoType", [virtualSchema, blockSchema]
 
 const RepoSetup = () => {
     // TODO: Show block storage list somewhere
-    const {isSuccess, data} = useQuery({
-        queryKey: ["repo-block-storage"],
-        queryFn: listBlockStorages
+    // const {isSuccess, data} = useQuery({
+    //     queryKey: ["repo-block-storage"],
+    //     queryFn: listBlockStorages
+    // });
+
+    const {isSuccess: repoInitSuccess, isPending: repoInitPending, mutate: setupRepo} = useMutation({
+        mutationFn: initRepo
     });
 
+    console.log(repoInitSuccess);
+
+    const generatedName = generateName();
+
     const defaultFormValues: RepoInitDto = {
-        name: generateName(),
-        branchName: "main",
+        name: generatedName,
         repoType: "virtual",
-        path: "/var/lib/post-branch/virtualdisk01.img",
-        size: 1,
-        sizeUnit: "G"
+        path: `/var/lib/post-branch/${generatedName}-${getRandomInt(0, 100)}.img`,
+        size: 100,
+        sizeUnit: "M"
     }
 
     const form = useForm<RepoInitDto>({
@@ -75,12 +81,8 @@ const RepoSetup = () => {
     const repoType = form.watch("repoType");
 
     const onSubmit = async (data: RepoInitDto) => {
-        try {
-            // Handle form submission here
-            console.log(data);
-        } catch (error) {
-            console.error('Error submitting form:', error);
-        }
+        console.log(data);
+        setupRepo(data);
     };
 
     const clearVirtualStorageValues = (value: RepoType) => {
@@ -124,6 +126,7 @@ const RepoSetup = () => {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="mt-10 w-2/3 space-y-8">
 
                     <FormField
+                        disabled={repoInitPending || repoInitSuccess}
                         control={form.control}
                         name="name"
                         render={({field}) => (
@@ -148,34 +151,12 @@ const RepoSetup = () => {
 
                     <FormField
                         control={form.control}
-                        name="branchName"
-                        render={({field}) => (
-                            <FormItem>
-                                <FormLabel>Branch Name</FormLabel>
-                                <FormControl>
-                                    <Input {...field}
-                                           placeholder="Enter Branch Name"
-                                           spellCheck="false"
-                                           onChange={e => {
-                                               e.target.value = e.target.value.toLowerCase().trim();
-                                               field.onChange(e);
-                                           }}/>
-                                </FormControl>
-                                <FormDescription>
-                                    Enter the name of main Postgres branch
-                                </FormDescription>
-                                <FormMessage/>
-                            </FormItem>
-                        )}
-                    />
-
-                    <FormField
-                        control={form.control}
                         name="repoType"
                         render={({field}) => (
                             <FormItem className="flex-1">
                                 <FormLabel>Storage Type</FormLabel>
                                 <Select
+                                    disabled={repoInitPending || repoInitSuccess}
                                     defaultValue={field.value}
                                     onValueChange={(value: RepoType) => {
                                         field.onChange(value);
@@ -203,6 +184,7 @@ const RepoSetup = () => {
                     />
 
                     <FormField
+                        disabled={repoInitPending || repoInitSuccess}
                         control={form.control}
                         name="path"
                         render={({field}) => (
@@ -231,6 +213,7 @@ const RepoSetup = () => {
                     {repoType === 'virtual' && (
                         <div className="flex gap-4">
                             <FormField
+                                disabled={repoInitPending || repoInitSuccess}
                                 control={form.control}
                                 name="size"
                                 render={({field}) => (
@@ -258,7 +241,10 @@ const RepoSetup = () => {
                                 render={({field}) => (
                                     <FormItem className="flex-1">
                                         <FormLabel>Size Unit</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <Select
+                                            disabled={repoInitPending || repoInitSuccess}
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}>
                                             <FormControl>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Select unit"/>
@@ -280,7 +266,23 @@ const RepoSetup = () => {
                         </div>
                     )}
 
-                    <div><Button type="submit">Initialize Repository</Button></div>
+                    <div className={"flex gap-4"}>
+                        <Button
+                            type="submit"
+                            variant={repoInitSuccess ? "success" : "default"}
+                            disabled={repoInitPending || repoInitSuccess}>
+
+                            <Spinner isLoading={repoInitPending}/>
+                            {repoInitSuccess && <Check/>}
+                            {repoInitSuccess ? "Repository created" : "Create repository"}
+                        </Button>
+
+                        {repoInitSuccess && (
+                            <Button>
+                                Setup Postgres <ArrowRight/>
+                            </Button>
+                        )}
+                    </div>
                 </form>
             </Form>
 

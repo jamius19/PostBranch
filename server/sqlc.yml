@@ -5,5 +5,5 @@ sql:
     schema: "./schema/"
     gen:
       go:
-        package: "fetch"
-        out: "data/fetch"
+        package: "dao"
+        out: "data/dao"

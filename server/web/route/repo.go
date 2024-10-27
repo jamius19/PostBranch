@@ -6,7 +6,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
-	"github.com/jamius19/postbranch/data/fetch"
+	"github.com/jamius19/postbranch/data/dao"
 	"github.com/jamius19/postbranch/dto"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo"
@@ -31,24 +31,30 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := repo.InitializeRepo(&repoinit)
-
+	repoResponse, err := repo.InitializeRepo(r.Context(), &repoinit)
 	if err != nil {
 		util.WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
+
+	response := dto.Response[dto.RepoResponse]{
+		Data:  repoResponse,
+		Error: nil,
+	}
+
+	util.WriteResponse(w, response, http.StatusOK)
 }
 
 func ListRepos(w http.ResponseWriter, r *http.Request) {
-	repo, err := data.Fetcher.ListRepo(r.Context())
+	repos, err := data.Fetcher.ListRepo(r.Context())
 	if err != nil {
 		log.Error(err)
 		util.WriteError(w, err, http.StatusInternalServerError)
 		return
 	}
 
-	response := dto.Response[[]fetch.Repo]{
-		Data:  &repo,
+	response := dto.Response[[]dao.Repo]{
+		Data:  &repos,
 		Error: nil,
 	}
 

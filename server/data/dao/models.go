@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.27.0
 
-package fetch
+package dao
 
 import (
 	"database/sql"
@@ -13,7 +13,6 @@ type Branch struct {
 	ID        int64
 	Name      string
 	Path      string
-	PgID      sql.NullInt64
 	ParentID  int64
 	DatasetID int64
 	CreatedAt time.Time
@@ -44,7 +43,7 @@ type Repo struct {
 type ZfsDataset struct {
 	ID        int64
 	Name      string
-	PoolID    sql.NullInt64
+	PoolID    int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

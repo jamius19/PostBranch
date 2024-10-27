@@ -3,11 +3,10 @@
 //   sqlc v1.27.0
 // source: zfsqueries.sql
 
-package fetch
+package dao
 
 import (
 	"context"
-	"database/sql"
 )
 
 const createDataset = `-- name: CreateDataset :one
@@ -18,7 +17,7 @@ RETURNING id, name, pool_id, created_at, updated_at
 
 type CreateDatasetParams struct {
 	Name   string
-	PoolID sql.NullInt64
+	PoolID int64
 }
 
 func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (ZfsDataset, error) {

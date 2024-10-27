@@ -2,8 +2,11 @@ CREATE TABLE IF NOT EXISTS repo
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       VARCHAR(255) NOT NULL,
+    repo_type  VARCHAR(60)  NOT NULL,
+    size       INTEGER      NOT NULL,
+    size_unit  VARCHAR(60)  NOT NULL,
+    pool_id    INTEGER      NOT NULL REFERENCES zfs_pool (id) ON DELETE CASCADE,
     pg_id      INTEGER REFERENCES pg (id) ON DELETE CASCADE,
-    dataset_id INTEGER      NOT NULL REFERENCES zfs_dataset (id) ON DELETE CASCADE,
     created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 )

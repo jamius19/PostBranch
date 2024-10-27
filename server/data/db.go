@@ -2,7 +2,7 @@ package data
 
 import (
 	"database/sql"
-	"github.com/jamius19/postbranch/data/fetch"
+	"github.com/jamius19/postbranch/data/dao"
 	"github.com/jamius19/postbranch/logger"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -10,7 +10,7 @@ import (
 const dbPath = "/var/lib/postbranch/postbranch.db"
 
 var Db *sql.DB
-var Fetcher *fetch.Queries
+var Fetcher *dao.Queries
 
 func Initialize() *sql.DB {
 	var err error
@@ -20,7 +20,7 @@ func Initialize() *sql.DB {
 		logger.Logger.Fatal(err)
 	}
 
-	Fetcher = fetch.New(Db)
+	Fetcher = dao.New(Db)
 
 	logger.Logger.Info("Initialized database")
 	return Db

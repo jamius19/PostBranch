@@ -3,11 +3,10 @@
 //   sqlc v1.27.0
 // source: repoqueries.sql
 
-package fetch
+package dao
 
 import (
 	"context"
-	"database/sql"
 )
 
 const countRepo = `-- name: CountRepo :one
@@ -22,9 +21,10 @@ func (q *Queries) CountRepo(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const createRepo = `-- name: CreateRepo :execresult
+const createRepo = `-- name: CreateRepo :one
 INSERT INTO repo (name, repo_type, size, size_unit, pool_id)
 VALUES (?, ?, ?, ?, ?)
+RETURNING id, name, repo_type, size, size_unit, pool_id, pg_id, created_at, updated_at
 `
 
 type CreateRepoParams struct {
@@ -35,14 +35,27 @@ type CreateRepoParams struct {
 	PoolID   int64
 }
 
-func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (sql.Result, error) {
-	return q.db.ExecContext(ctx, createRepo,
+func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, error) {
+	row := q.db.QueryRowContext(ctx, createRepo,
 		arg.Name,
 		arg.RepoType,
 		arg.Size,
 		arg.SizeUnit,
 		arg.PoolID,
 	)
+	var i Repo
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.RepoType,
+		&i.Size,
+		&i.SizeUnit,
+		&i.PoolID,
+		&i.PgID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getRepo = `-- name: GetRepo :one
