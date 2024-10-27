@@ -7,9 +7,10 @@ import (
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
-	"github.com/jamius19/postbranch/dto"
+	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
+	"github.com/jamius19/postbranch/web/responseerror"
 )
 
 var log = logger.Logger
@@ -32,7 +33,7 @@ func VirtualPool(ctx context.Context, repoinit *dto.RepoInit) (*dao.ZfsPool, err
 	loopNo, err := findFreeLoopDevice()
 	if err != nil {
 		log.Errorf("Failed to find free loop device: %s", err)
-		return nil, err
+		return nil, responseerror.Clarify("Failed to find free loop device")
 	}
 
 	log.Infof("Found free loop device: %d", loopNo)
@@ -48,7 +49,7 @@ func VirtualPool(ctx context.Context, repoinit *dto.RepoInit) (*dao.ZfsPool, err
 	_, err = cmd.Multi(cmds)
 	if err != nil {
 		log.Errorf("Failed to create virtual disk: %s", err)
-		return nil, err
+		return nil, responseerror.Clarify("Error creating virtual disk")
 	}
 
 	pool, err := pool(ctx, repoinit, loopDevice)
@@ -78,6 +79,10 @@ func pool(ctx context.Context, repoinit *dto.RepoInit, path string) (*dao.ZfsPoo
 	// Run the Commands
 	//
 	_, err := cmd.Multi(cmds)
+	if err != nil {
+		log.Errorf("Failed to create pool: %s", err)
+		return nil, err
+	}
 
 	// Create a new pool
 	poolData := dao.CreatePoolParams{
@@ -87,8 +92,9 @@ func pool(ctx context.Context, repoinit *dto.RepoInit, path string) (*dao.ZfsPoo
 
 	pool, err := data.Fetcher.CreatePool(ctx, poolData)
 	if err != nil {
+		// TODO: Cleanup Pool
 		log.Errorf("Failed to insert pool. Repo:%v Path: %s Error:%s", poolData, path, err)
-		return nil, err
+		return nil, responseerror.Clarify("Failed to create pool")
 	}
 
 	log.Infof("Pool insertion successful %s", pool.Name)

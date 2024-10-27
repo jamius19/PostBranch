@@ -8,7 +8,7 @@ import (
 func findFreeLoopDevice() (int, error) {
 	const maxMinor = 255
 
-	// Check existing /dev/loop* devices
+	//Check existing /dev/loop* devices
 	for i := 50; i <= maxMinor; i++ {
 		loopDevice := fmt.Sprintf("/dev/loop%d", i)
 		if _, err := os.Stat(loopDevice); err != nil {

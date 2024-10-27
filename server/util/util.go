@@ -2,15 +2,16 @@ package util
 
 import (
 	"encoding/json"
-	"github.com/jamius19/postbranch/dto"
+	"github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
 	"strings"
 )
 
-func WriteResponse(w http.ResponseWriter, data interface{}, code int) {
+func WriteResponse(w http.ResponseWriter, r *http.Request, data interface{}, code int) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		WriteError(w, err, http.StatusInternalServerError)
+		WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
@@ -19,13 +20,13 @@ func WriteResponse(w http.ResponseWriter, data interface{}, code int) {
 	w.Write(jsonData)
 }
 
-func WriteError(w http.ResponseWriter, err error, code int) {
+func WriteError(w http.ResponseWriter, r *http.Request, err error, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 
 	response := dto.Response[any]{
 		Data:  nil,
-		Error: dto.GetError(err.Error()),
+		Error: responseerror.AddAndGetErrors(r.Context(), err.Error()),
 	}
 
 	responseJson, _ := json.Marshal(response)

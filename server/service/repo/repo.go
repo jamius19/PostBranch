@@ -4,9 +4,10 @@ import (
 	"context"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
-	"github.com/jamius19/postbranch/dto"
+	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo/zfs"
+	"github.com/jamius19/postbranch/web/responseerror"
 )
 
 var log = logger.Logger
@@ -35,8 +36,9 @@ func InitializeRepo(ctx context.Context, repoinit *dto.RepoInit) (*dto.RepoRespo
 
 		createdRepo, err := data.Fetcher.CreateRepo(ctx, repoCreateDto)
 		if err != nil {
+			// TODO: Cleanup Pool and Dataset
 			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoinit.Name, repoCreateDto, err)
-			return nil, err
+			return nil, responseerror.Clarify("Failed to create repository")
 		}
 
 		repoResponse := dto.RepoResponse{

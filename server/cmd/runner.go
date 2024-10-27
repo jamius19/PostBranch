@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
@@ -28,7 +29,7 @@ func Single(key string, name string, args ...string) (*string, error) {
 
 	if err != nil {
 		log.Errorf("Error executing %s command: %s %v error: %s, output: %v", key, name, args, err, out)
-		return nil, err
+		return nil, errors.New("error executing command")
 	}
 
 	output := string(out)
@@ -47,7 +48,10 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 		output, err := Single(el.Key, command.Name, command.Args...)
 
 		if err != nil {
-			log.Errorf("Error executing key: %s command: %s args: %s error: %s, output: %v", el.Key, command.Name, command.Args, err, output)
+			log.Errorf(
+				"Error executing key: %s command: %s args: %s error: %s, output: %v",
+				el.Key, command.Name, command.Args, err, output,
+			)
 
 			outputs.Set(el.Key, CommandOutput{
 				Name:   command.Name,

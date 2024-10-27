@@ -60,8 +60,6 @@ const RepoSetup = () => {
         mutationFn: initRepo
     });
 
-    console.log(repoInitSuccess);
-
     const generatedName = generateName();
 
     const defaultFormValues: RepoInitDto = {

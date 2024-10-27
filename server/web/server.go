@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/opts"
+	"github.com/jamius19/postbranch/web/middleware"
 	"net/http"
 	"os"
 	"os/signal"
@@ -24,7 +25,7 @@ func Initialize() {
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 
 	r := chi.NewRouter()
-	middlewares(r, rootCtx)
+	middleware.Middlewares(r, rootCtx)
 	routes(r)
 
 	log.Infof("Starting server on port %d", opts.Config.Server.Port)
