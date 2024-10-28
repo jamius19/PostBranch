@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"errors"
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
+	"github.com/jamius19/postbranch/web/responseerror"
 	"os/exec"
 )
 
@@ -29,7 +29,7 @@ func Single(key string, name string, args ...string) (*string, error) {
 
 	if err != nil {
 		log.Errorf("Error executing %s command: %s %v error: %s, output: %v", key, name, args, err, out)
-		return nil, errors.New("error executing command")
+		return nil, responseerror.Clarify("Error executing command")
 	}
 
 	output := string(out)
@@ -83,21 +83,21 @@ func Get(name string, args ...string) Command {
 }
 
 func LogCmds(cmds *orderedmap.OrderedMap[string, Command]) {
-	log.Infof("--- Logging commands")
+	log.Infof(">>> Logging commands")
 
 	for el := cmds.Front(); el != nil; el = el.Next() {
 		log.Infof("Executing %s command: %s %s", el.Key, el.Value.Name, el.Value.Args)
 	}
 
-	log.Infof("--- Command logging finished")
+	log.Infof("<<< Command logging finished")
 }
 
 func LogOutputs(outputs *orderedmap.OrderedMap[string, CommandOutput]) {
-	log.Infof("--- Logging outputs")
+	log.Infof(">>> Logging outputs")
 
 	for el := outputs.Front(); el != nil; el = el.Next() {
 		log.Infof("Output for %s: %v", el.Key, util.StringVal(el.Value.Output))
 	}
 
-	log.Infof("--- Output logging finished")
+	log.Infof("<<< Output logging finished")
 }

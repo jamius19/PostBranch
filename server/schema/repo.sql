@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS repo
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       VARCHAR(255) NOT NULL,
+    name       VARCHAR(255) NOT NULL UNIQUE,
     repo_type  VARCHAR(60)  NOT NULL,
     size       INTEGER      NOT NULL,
     size_unit  VARCHAR(60)  NOT NULL,

@@ -19,7 +19,7 @@ type RepoResponse struct {
 	RepoType  string    `json:"repoType"`
 	Size      int64     `json:"size"`
 	SizeUnit  string    `json:"sizeUnit"`
-	PgID      *string   `json:"pg_id"`
+	PgID      *int64    `json:"pg_id"`
 	PoolID    int64     `json:"pool_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -10,6 +10,7 @@ func routes(r *chi.Mux) {
 		r.Get("/", route.ListRepos)
 		r.Post("/", route.InitializeRepo)
 
+		r.Get("/names", route.ListRepoNames)
 		//r.Get("/block-storages", route.ListBlockStorage)
 	})
 }

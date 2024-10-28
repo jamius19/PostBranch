@@ -4,12 +4,24 @@ FROM repo
 WHERE id = ?;
 
 -- name: ListRepo :many
-SELECT *
-FROM repo;
+SELECT sqlc.embed(rp), sqlc.embed(zp)
+FROM repo rp
+         JOIN zfs_pool zp on rp.pool_id = zp.id;
 
 -- name: CountRepo :one
 SELECT COUNT(*)
 FROM repo;
+
+-- name: ListRepoNames :many
+SELECT name
+FROM repo;
+
+-- name: CountRepoByNameOrPath :one
+SELECT COUNT(*)
+FROM repo rp
+         JOIN zfs_pool zp on rp.pool_id = zp.id
+WHERE rp.name = ?
+   OR zp.path = ?;
 
 -- name: CreateRepo :one
 INSERT INTO repo (name, repo_type, size, size_unit, pool_id)

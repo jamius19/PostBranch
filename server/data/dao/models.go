@@ -13,7 +13,7 @@ type Branch struct {
 	ID        int64
 	Name      string
 	Path      string
-	ParentID  int64
+	ParentID  sql.NullInt64
 	DatasetID int64
 	CreatedAt time.Time
 	UpdatedAt time.Time

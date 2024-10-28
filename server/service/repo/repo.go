@@ -21,6 +21,8 @@ func InitializeRepo(ctx context.Context, repoinit *dto.RepoInit) (*dto.RepoRespo
 			return nil, err
 		}
 
+		log.Infof("Initialized virtual pool. PoolInfo: %v", pool)
+
 		_, err = zfs.EmptyDataset(ctx, pool, "main")
 		if err != nil {
 			return nil, err

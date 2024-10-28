@@ -6,7 +6,7 @@ import {Button} from "@/components/ui/button.tsx";
 const Repo = () => {
     const {isPending, data: response, error} = useQuery({
         queryKey: ["repo-list"],
-        queryFn: () => listRepos(),
+        queryFn: listRepos,
     });
 
     if (error) {
@@ -25,6 +25,12 @@ const Repo = () => {
                 <>
                     Repositories found!
                     {response?.data.map(repo => repo.name)}
+
+                    <div>
+                        <Link to={"/repo/setup"}>
+                            <Button className={"mt-2"}>Add</Button>
+                        </Link>
+                    </div>
                 </>
             ) : (
                 <>

@@ -5,7 +5,7 @@ const Spinner = (props: { isLoading?: boolean }) => {
 
     return (
         <>
-            {isLoading && <LoaderCircle className={"animate-spin"}/>}
+            {isLoading && <LoaderCircle className={"animate-spin"} color={"#63A8F5"}/>}
         </>
     );
 };

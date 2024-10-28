@@ -13,9 +13,9 @@ import {
     FormLabel,
     FormMessage
 } from "@/components/ui/form.tsx";
-import {RepoInitDto, RepoType} from "@/@types/repo-init-dto.ts";
-import {useMutation} from "@tanstack/react-query";
-import {initRepo} from "@/service/repo-service.ts";
+import {RepoInitDto, RepoType} from "@/@types/repo/repo-init-dto.ts";
+import {useMutation, useQuery} from "@tanstack/react-query";
+import {initRepo, listRepoNames, listRepos} from "@/service/repo-service.ts";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -27,15 +27,9 @@ import {generateName} from '@criblinc/docker-names'
 import Spinner from "@/components/Spinner.tsx";
 import {ArrowRight, Check} from "lucide-react";
 import {getRandomInt} from "@/util/lib.ts";
+import {useEffect, useRef, useState} from "react";
+import {Link} from "react-router-dom";
 
-const baseFormSchema = z.object({
-    name: z.string()
-        .min(1, "Name is required")
-        .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens"),
-    path: z.string()
-        .min(1, "Path is required")
-        .regex(/^\/\S+$/, "Path must start with / and cannot contain spaces"),
-});
 const virtualSchema = z.object({
     repoType: z.literal("virtual"),
     size: z.number().positive("Size value must be greater than 0"),
@@ -46,9 +40,6 @@ const blockSchema = z.object({
     repoType: z.literal("block"),
 });
 
-const formSchema = z.discriminatedUnion("repoType", [virtualSchema, blockSchema])
-    .and(baseFormSchema);
-
 const RepoSetup = () => {
     // TODO: Show block storage list somewhere
     // const {isSuccess, data} = useQuery({
@@ -56,19 +47,59 @@ const RepoSetup = () => {
     //     queryFn: listBlockStorages
     // });
 
-    const {isSuccess: repoInitSuccess, isPending: repoInitPending, mutate: setupRepo} = useMutation({
+    const reposQuery = useQuery({
+        queryKey: ["repo-list"],
+        queryFn: listRepos,
+    });
+
+    const repoUpdate = useMutation({
         mutationFn: initRepo
     });
 
+    const [nameUpdated, setNameUpdated] = useState(false)
+
     const generatedName = generateName();
+    const repoInitSuccess = repoUpdate.isSuccess;
+    const repoInitPending = repoUpdate.isPending;
+
+    const baseFormSchema = z.object({
+        name: z.string()
+            .min(1, "Name is required")
+            .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens")
+            .refine(val => !reposQuery.data?.data.some(repo => repo.name === val),
+                "Repository with the same name already exists"),
+        path: z.string()
+            .min(1, "Path is required")
+            .regex(/^\/\S+$/, "Path must start with / and cannot contain spaces")
+            .refine(val => !reposQuery.data?.data.some(repo => repo.path === val),
+                "Repository with the same path already exists"),
+    });
+
+    const formSchema = z.discriminatedUnion("repoType", [virtualSchema, blockSchema])
+        .and(baseFormSchema);
+
+
+    useEffect(() => {
+        if (reposQuery.isSuccess) {
+            const needsNewName = reposQuery.data.data.some(repo => repo.name === generatedName);
+
+            if (needsNewName) {
+                const newName = generateName();
+                form.setValue("name", newName);
+                form.setValue("path", getVirtualPath(newName));
+            }
+
+            setNameUpdated(true);
+        }
+    }, [reposQuery.isSuccess]);
 
     const defaultFormValues: RepoInitDto = {
         name: generatedName,
         repoType: "virtual",
-        path: `/var/lib/post-branch/${generatedName}-${getRandomInt(0, 100)}.img`,
+        path: getVirtualPath(generatedName),
         size: 100,
         sizeUnit: "M"
-    }
+    };
 
     const form = useForm<RepoInitDto>({
         resolver: zodResolver(formSchema),
@@ -80,7 +111,7 @@ const RepoSetup = () => {
 
     const onSubmit = async (data: RepoInitDto) => {
         console.log(data);
-        setupRepo(data);
+        repoUpdate.mutate(data);
     };
 
     const clearVirtualStorageValues = (value: RepoType) => {
@@ -93,6 +124,10 @@ const RepoSetup = () => {
             form.setValue("sizeUnit", 'G');
             form.setValue("path", "/var/lib/post-branch/virtualdisk01.img")
         }
+    }
+
+    if (reposQuery.isPending || !nameUpdated) {
+        return <Spinner/>;
     }
 
     return (
@@ -118,10 +153,10 @@ const RepoSetup = () => {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <h1>Repository Setup</h1>
+            <h1 className={"mb-10"}>Repository Setup</h1>
 
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="mt-10 w-2/3 space-y-8">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="w-2/3 space-y-8">
 
                     <FormField
                         disabled={repoInitPending || repoInitSuccess}
@@ -182,7 +217,6 @@ const RepoSetup = () => {
                     />
 
                     <FormField
-                        disabled={repoInitPending || repoInitSuccess}
                         control={form.control}
                         name="path"
                         render={({field}) => (
@@ -191,6 +225,7 @@ const RepoSetup = () => {
                                 <FormControl>
                                     <Input
                                         {...field}
+                                        disabled={repoInitPending || repoInitSuccess}
                                         className={"mono"}
                                         placeholder={repoType === 'virtual' ? "Enter repository path" : "/dev/vdb"}
                                         spellCheck="false"
@@ -276,9 +311,11 @@ const RepoSetup = () => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Button>
-                                Setup Postgres <ArrowRight/>
-                            </Button>
+                            <Link to={`/repo/setup/${repoUpdate.data.data.id}/postgres`}>
+                                <Button>
+                                    Setup Postgres <ArrowRight/>
+                                </Button>
+                            </Link>
                         )}
                     </div>
                 </form>
@@ -287,5 +324,9 @@ const RepoSetup = () => {
         </div>
     );
 };
+
+const getVirtualPath = (generatedName: string) => {
+    return `/var/lib/post-branch/${generatedName}-${getRandomInt(0, 100)}.img`;
+}
 
 export default RepoSetup;

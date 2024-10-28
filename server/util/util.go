@@ -1,6 +1,7 @@
 package util
 
 import (
+	"database/sql"
 	"encoding/json"
 	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-func WriteResponse(w http.ResponseWriter, r *http.Request, data interface{}, code int) {
+func WriteResponse(w http.ResponseWriter, r *http.Request, data any, code int) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		WriteError(w, r, err, http.StatusInternalServerError)
@@ -58,4 +59,12 @@ func StringVal(str *string) string {
 	}
 
 	return output
+}
+
+func GetNullableInt64(nullValue *sql.NullInt64) *int64 {
+	if nullValue.Valid {
+		return &nullValue.Int64
+	} else {
+		return nil
+	}
 }

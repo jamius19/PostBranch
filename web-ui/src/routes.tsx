@@ -3,6 +3,7 @@ import Repo from "@/route/repo/repo.tsx";
 import Layout from "./layout/layout.tsx";
 import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
 import Error from "./route/error/error.tsx";
+import PgSetup from "@/route/repo/setup/pg-setup.tsx";
 
 const router = createBrowserRouter([
     {
@@ -16,6 +17,11 @@ const router = createBrowserRouter([
             {
                 path: "/repo/setup",
                 element: <RepoSetup/>,
+            },
+
+            {
+                path: "/repo/setup/:repoId/postgres",
+                element: <PgSetup/>,
             },
             {
                 path: "error",

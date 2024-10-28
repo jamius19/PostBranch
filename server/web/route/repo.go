@@ -5,10 +5,11 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
-	dto2 "github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo"
 	"github.com/jamius19/postbranch/util"
+	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
 )
 
@@ -16,7 +17,7 @@ var validate = validator.New()
 var log = logger.Logger
 
 func InitializeRepo(w http.ResponseWriter, r *http.Request) {
-	var repoinit dto2.RepoInit
+	var repoinit dto.RepoInit
 
 	if err := json.NewDecoder(r.Body).Decode(&repoinit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)
@@ -28,13 +29,40 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sameRepoCount, err := data.Fetcher.CountRepoByNameOrPath(r.Context(), dao.CountRepoByNameOrPathParams{
+		Name: repoinit.Name,
+		Path: repoinit.Path,
+	})
+
+	if err != nil {
+		log.Errorf("Error fetching similar repository. RepoInit: %v", &repoinit)
+		util.WriteError(
+			w,
+			r,
+			responseerror.Clarify("Error fetching similar repository"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	} else if sameRepoCount > 0 {
+		log.Errorf("Repo exists with same name and/or path. RepoInit: %v", &repoinit)
+		util.WriteError(
+			w,
+			r,
+			responseerror.Clarify("Repository exists with same name and/or path"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
 	repoResponse, err := repo.InitializeRepo(r.Context(), &repoinit)
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	response := dto2.Response[dto2.RepoResponse]{
+	response := dto.Response[dto.RepoResponse]{
 		Data:  repoResponse,
 		Error: nil,
 	}
@@ -44,15 +72,53 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 
 func ListRepos(w http.ResponseWriter, r *http.Request) {
 	repos, err := data.Fetcher.ListRepo(r.Context())
+
 	if err != nil {
 		log.Error(err)
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	response := dto2.Response[[]dao.Repo]{
-		Data:  &repos,
-		Error: nil,
+	var reposResponse []dto.RepoResponse
+	for i := range repos {
+		repoResponse := dto.RepoResponse{
+			ID:        repos[i].Repo.ID,
+			Name:      repos[i].Repo.Name,
+			Path:      repos[i].ZfsPool.Path,
+			RepoType:  repos[i].Repo.RepoType,
+			Size:      repos[i].Repo.Size,
+			SizeUnit:  repos[i].Repo.SizeUnit,
+			PgID:      util.GetNullableInt64(&repos[i].Repo.PgID),
+			PoolID:    repos[i].Repo.PoolID,
+			CreatedAt: repos[i].Repo.CreatedAt,
+			UpdatedAt: repos[i].Repo.UpdatedAt,
+		}
+
+		reposResponse = append(reposResponse, repoResponse)
+	}
+
+	response := dto.Response[[]dto.RepoResponse]{
+		Data:   &reposResponse,
+		Error:  nil,
+		IsList: true,
+	}
+
+	util.WriteResponse(w, r, response, http.StatusOK)
+}
+
+func ListRepoNames(w http.ResponseWriter, r *http.Request) {
+	log.Info("Fetching repo names")
+
+	names, err := data.Fetcher.ListRepoNames(r.Context())
+	if err != nil {
+		log.Errorf("Error fetching repo names. Error: %v", err)
+		util.WriteError(w, r, responseerror.Clarify("Error Fetching repo names"), http.StatusInternalServerError)
+	}
+
+	response := dto.Response[[]string]{
+		Data:   &names,
+		Error:  nil,
+		IsList: true,
 	}
 
 	util.WriteResponse(w, r, response, http.StatusOK)
