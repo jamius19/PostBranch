@@ -29,6 +29,7 @@ import {ArrowRight, Check} from "lucide-react";
 import {getRandomInt} from "@/util/lib.ts";
 import {useEffect, useRef, useState} from "react";
 import {Link} from "react-router-dom";
+import {Slide, toast} from "react-toastify";
 
 const virtualSchema = z.object({
     repoType: z.literal("virtual"),
@@ -66,32 +67,17 @@ const RepoSetup = () => {
         name: z.string()
             .min(1, "Name is required")
             .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens")
-            .refine(val => !reposQuery.data?.data.some(repo => repo.name === val),
+            .refine(val => !reposQuery.data?.data?.some(repo => repo.name === val),
                 "Repository with the same name already exists"),
         path: z.string()
             .min(1, "Path is required")
             .regex(/^\/\S+$/, "Path must start with / and cannot contain spaces")
-            .refine(val => !reposQuery.data?.data.some(repo => repo.path === val),
+            .refine(val => !reposQuery.data?.data?.some(repo => repo.path === val),
                 "Repository with the same path already exists"),
     });
 
     const formSchema = z.discriminatedUnion("repoType", [virtualSchema, blockSchema])
         .and(baseFormSchema);
-
-
-    useEffect(() => {
-        if (reposQuery.isSuccess) {
-            const needsNewName = reposQuery.data.data.some(repo => repo.name === generatedName);
-
-            if (needsNewName) {
-                const newName = generateName();
-                form.setValue("name", newName);
-                form.setValue("path", getVirtualPath(newName));
-            }
-
-            setNameUpdated(true);
-        }
-    }, [reposQuery.isSuccess]);
 
     const defaultFormValues: RepoInitDto = {
         name: generatedName,
@@ -125,6 +111,27 @@ const RepoSetup = () => {
             form.setValue("path", "/var/lib/post-branch/virtualdisk01.img")
         }
     }
+
+    useEffect(() => {
+        if (reposQuery.isSuccess) {
+            const needsNewName = reposQuery.data.data?.some(repo => repo.name === generatedName);
+
+            if (needsNewName) {
+                const newName = generateName();
+                form.setValue("name", newName);
+                form.setValue("path", getVirtualPath(newName));
+            }
+
+            setNameUpdated(true);
+        }
+    }, [reposQuery.isSuccess]);
+
+    useEffect(() => {
+        if (repoUpdate.isError) {
+            toast.error(repoUpdate.error.message);
+        }
+
+    }, [repoUpdate.isError]);
 
     if (reposQuery.isPending || !nameUpdated) {
         return <Spinner/>;
@@ -311,7 +318,7 @@ const RepoSetup = () => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Link to={`/repo/setup/${repoUpdate.data.data.id}/postgres`}>
+                            <Link to={`/repo/setup/${repoUpdate.data.data!.id}/postgres`}>
                                 <Button>
                                     Setup Postgres <ArrowRight/>
                                 </Button>

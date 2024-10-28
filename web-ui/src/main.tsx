@@ -7,6 +7,7 @@ import {
     QueryClient,
     QueryClientProvider,
 } from '@tanstack/react-query'
+import 'react-toastify/dist/ReactToastify.css';
 import './main.css';
 import router from "@/routes.tsx";
 

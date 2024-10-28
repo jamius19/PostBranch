@@ -1,4 +1,4 @@
 export interface ResponseDto<T> {
-    data: T;
+    data?: T;
     errors?: string[];
 }
