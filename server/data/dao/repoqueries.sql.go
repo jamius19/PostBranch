@@ -42,34 +42,24 @@ func (q *Queries) CountRepoByNameOrPath(ctx context.Context, arg CountRepoByName
 }
 
 const createRepo = `-- name: CreateRepo :one
-INSERT INTO repo (name, repo_type, size, size_unit, pool_id)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, name, repo_type, size, size_unit, pool_id, pg_id, created_at, updated_at
+INSERT INTO repo (name, repo_type, pool_id)
+VALUES (?, ?, ?)
+RETURNING id, name, repo_type, pool_id, pg_id, created_at, updated_at
 `
 
 type CreateRepoParams struct {
 	Name     string
 	RepoType string
-	Size     int64
-	SizeUnit string
 	PoolID   int64
 }
 
 func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, error) {
-	row := q.db.QueryRowContext(ctx, createRepo,
-		arg.Name,
-		arg.RepoType,
-		arg.Size,
-		arg.SizeUnit,
-		arg.PoolID,
-	)
+	row := q.db.QueryRowContext(ctx, createRepo, arg.Name, arg.RepoType, arg.PoolID)
 	var i Repo
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.RepoType,
-		&i.Size,
-		&i.SizeUnit,
 		&i.PoolID,
 		&i.PgID,
 		&i.CreatedAt,
@@ -79,7 +69,7 @@ func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, e
 }
 
 const getRepo = `-- name: GetRepo :one
-SELECT id, name, repo_type, size, size_unit, pool_id, pg_id, created_at, updated_at
+SELECT id, name, repo_type, pool_id, pg_id, created_at, updated_at
 FROM repo
 WHERE id = ?
 `
@@ -91,8 +81,6 @@ func (q *Queries) GetRepo(ctx context.Context, id int64) (Repo, error) {
 		&i.ID,
 		&i.Name,
 		&i.RepoType,
-		&i.Size,
-		&i.SizeUnit,
 		&i.PoolID,
 		&i.PgID,
 		&i.CreatedAt,
@@ -102,7 +90,7 @@ func (q *Queries) GetRepo(ctx context.Context, id int64) (Repo, error) {
 }
 
 const listRepo = `-- name: ListRepo :many
-SELECT rp.id, rp.name, rp.repo_type, rp.size, rp.size_unit, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.name, zp.created_at, zp.updated_at
+SELECT rp.id, rp.name, rp.repo_type, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.size_in_mb, zp.name, zp.mount_path, zp.created_at, zp.updated_at
 FROM repo rp
          JOIN zfs_pool zp on rp.pool_id = zp.id
 `
@@ -125,15 +113,15 @@ func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
 			&i.Repo.ID,
 			&i.Repo.Name,
 			&i.Repo.RepoType,
-			&i.Repo.Size,
-			&i.Repo.SizeUnit,
 			&i.Repo.PoolID,
 			&i.Repo.PgID,
 			&i.Repo.CreatedAt,
 			&i.Repo.UpdatedAt,
 			&i.ZfsPool.ID,
 			&i.ZfsPool.Path,
+			&i.ZfsPool.SizeInMb,
 			&i.ZfsPool.Name,
+			&i.ZfsPool.MountPath,
 			&i.ZfsPool.CreatedAt,
 			&i.ZfsPool.UpdatedAt,
 		); err != nil {

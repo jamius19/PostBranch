@@ -2,7 +2,9 @@ CREATE TABLE IF NOT EXISTS zfs_pool
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     path       VARCHAR(2048) NOT NULL,
+    size_in_mb INTEGER       NOT NULL,
     name       VARCHAR(255)  NOT NULL,
+    mount_path VARCHAR(2048) NOT NULL,
     created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

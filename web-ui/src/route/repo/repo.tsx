@@ -1,5 +1,5 @@
 import {useQuery} from "@tanstack/react-query";
-import {Link, Navigate, useNavigate} from "react-router-dom";
+import {Link, Navigate} from "react-router-dom";
 import {listRepos} from "@/service/repo-service.ts";
 import {Button} from "@/components/ui/button.tsx";
 

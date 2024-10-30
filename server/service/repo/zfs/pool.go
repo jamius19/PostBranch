@@ -7,7 +7,7 @@ import (
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
-	"github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -15,7 +15,7 @@ import (
 
 var log = logger.Logger
 
-func VirtualPool(ctx context.Context, repoinit *dto.RepoInit) (*dao.ZfsPool, error) {
+func VirtualPool(ctx context.Context, repoinit *repo.InitDto) (*dao.ZfsPool, error) {
 	log.Infof("ZFS Pool init %v", *repoinit)
 
 	_, path := util.SplitPath(repoinit.Path)
@@ -27,7 +27,7 @@ func VirtualPool(ctx context.Context, repoinit *dto.RepoInit) (*dao.ZfsPool, err
 	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
 	cmds.Set("create-folder", cmd.Get("mkdir", "-p", path))
 
-	filesize := fmt.Sprintf("%d%s", repoinit.Size, repoinit.SizeUnit)
+	filesize := fmt.Sprintf("%dM", repoinit.SizeInMb)
 	cmds.Set("create-file", cmd.Get("fallocate", "-l", filesize, repoinit.Path))
 
 	loopNo, err := findFreeLoopDevice()
@@ -61,24 +61,13 @@ func VirtualPool(ctx context.Context, repoinit *dto.RepoInit) (*dao.ZfsPool, err
 	return pool, nil
 }
 
-func pool(ctx context.Context, repoinit *dto.RepoInit, path string) (*dao.ZfsPool, error) {
-	//
-	// Set the Commands
-	//
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-
+func pool(ctx context.Context, repoinit *repo.InitDto, path string) (*dao.ZfsPool, error) {
 	mountPath := fmt.Sprintf("/mnt/pb-%s", repoinit.Name)
-	cmds.Set(
-		"create-zpool",
-		cmd.Get(
-			"zpool", "create", "-m", mountPath, repoinit.Name, path,
-		),
-	)
 
 	//
 	// Run the Commands
 	//
-	_, err := cmd.Multi(cmds)
+	_, err := cmd.Single("create-zpool", false, "zpool", "create", "-m", mountPath, repoinit.Name, path)
 	if err != nil {
 		log.Errorf("Failed to create pool: %s", err)
 		return nil, err
@@ -86,8 +75,10 @@ func pool(ctx context.Context, repoinit *dto.RepoInit, path string) (*dao.ZfsPoo
 
 	// Create a new pool
 	poolData := dao.CreatePoolParams{
-		Name: repoinit.Name,
-		Path: repoinit.Path,
+		Name:      repoinit.Name,
+		Path:      repoinit.Path,
+		SizeInMb:  repoinit.SizeInMb,
+		MountPath: mountPath,
 	}
 
 	pool, err := data.Fetcher.CreatePool(ctx, poolData)

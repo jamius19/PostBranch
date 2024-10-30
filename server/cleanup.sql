@@ -1,4 +1,7 @@
 DELETE
+FROM zfs_pool;
+
+DELETE
 FROM zfs_dataset;
 
 DELETE

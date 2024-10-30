@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
-	"github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo/zfs"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -12,7 +12,7 @@ import (
 
 var log = logger.Logger
 
-func InitializeRepo(ctx context.Context, repoinit *dto.RepoInit) (*dto.RepoResponse, error) {
+func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.RepoResponse, error) {
 	if repoinit.RepoType == "virtual" {
 		log.Infof("Initializing virtual repo")
 
@@ -32,8 +32,6 @@ func InitializeRepo(ctx context.Context, repoinit *dto.RepoInit) (*dto.RepoRespo
 			Name:     repoinit.Name,
 			PoolID:   pool.ID,
 			RepoType: repoinit.RepoType,
-			Size:     repoinit.Size,
-			SizeUnit: repoinit.SizeUnit,
 		}
 
 		createdRepo, err := data.Fetcher.CreateRepo(ctx, repoCreateDto)
@@ -43,13 +41,12 @@ func InitializeRepo(ctx context.Context, repoinit *dto.RepoInit) (*dto.RepoRespo
 			return nil, responseerror.Clarify("Failed to create repository")
 		}
 
-		repoResponse := dto.RepoResponse{
+		repoResponse := repo.RepoResponse{
 			ID:        createdRepo.ID,
 			Name:      createdRepo.Name,
 			Path:      pool.Path,
 			RepoType:  createdRepo.RepoType,
-			Size:      createdRepo.Size,
-			SizeUnit:  createdRepo.SizeUnit,
+			SizeInMb:  pool.SizeInMb,
 			PgID:      nil,
 			PoolID:    pool.ID,
 			CreatedAt: createdRepo.CreatedAt,

@@ -7,71 +7,121 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 )
 
-const countPg = `-- name: CountPg :one
-SELECT COUNT(*)
-FROM pg
+const createPg = `-- name: CreatePg :one
+INSERT INTO pg (pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
 `
 
-func (q *Queries) CountPg(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPg)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type CreatePgParams struct {
+	PgPath           string
+	Version          int64
+	StopPg           bool
+	PgUser           string
+	CustomConnection bool
+	Host             sql.NullString
+	Port             sql.NullInt64
+	Username         sql.NullString
+	Password         sql.NullString
+	Status           string
 }
 
-const getPg = `-- name: GetPg :one
-SELECT id, name, path, version, created_at, updated_at
-FROM pg
-WHERE id = ?
-`
-
-func (q *Queries) GetPg(ctx context.Context, id int64) (Pg, error) {
-	row := q.db.QueryRowContext(ctx, getPg, id)
+func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, createPg,
+		arg.PgPath,
+		arg.Version,
+		arg.StopPg,
+		arg.PgUser,
+		arg.CustomConnection,
+		arg.Host,
+		arg.Port,
+		arg.Username,
+		arg.Password,
+		arg.Status,
+	)
 	var i Pg
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
-		&i.Path,
+		&i.PgPath,
 		&i.Version,
+		&i.StopPg,
+		&i.PgUser,
+		&i.CustomConnection,
+		&i.Host,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+		&i.Status,
+		&i.Output,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const listPg = `-- name: ListPg :many
-SELECT id, name, path, version, created_at, updated_at
+const getPgById = `-- name: GetPgById :one
+SELECT id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
 FROM pg
+WHERE id = ?
 `
 
-func (q *Queries) ListPg(ctx context.Context) ([]Pg, error) {
-	rows, err := q.db.QueryContext(ctx, listPg)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Pg
-	for rows.Next() {
-		var i Pg
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Path,
-			&i.Version,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+func (q *Queries) GetPgById(ctx context.Context, id int64) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, getPgById, id)
+	var i Pg
+	err := row.Scan(
+		&i.ID,
+		&i.PgPath,
+		&i.Version,
+		&i.StopPg,
+		&i.PgUser,
+		&i.CustomConnection,
+		&i.Host,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+		&i.Status,
+		&i.Output,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updatePg = `-- name: UpdatePg :one
+UPDATE pg
+SET status = ?,
+    output = ?
+WHERE id = ?
+RETURNING id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
+`
+
+type UpdatePgParams struct {
+	Status string
+	Output sql.NullString
+	ID     int64
+}
+
+func (q *Queries) UpdatePg(ctx context.Context, arg UpdatePgParams) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, updatePg, arg.Status, arg.Output, arg.ID)
+	var i Pg
+	err := row.Scan(
+		&i.ID,
+		&i.PgPath,
+		&i.Version,
+		&i.StopPg,
+		&i.PgUser,
+		&i.CustomConnection,
+		&i.Host,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+		&i.Status,
+		&i.Output,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

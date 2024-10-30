@@ -3,6 +3,7 @@ package util
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
@@ -51,7 +52,7 @@ func SplitPath(filepath string) (filename string, path string) {
 	return filename, path
 }
 
-func StringVal(str *string) string {
+func SafeStringVal(str *string) string {
 	var output = "<nil>"
 
 	if str != nil && *str != "" {
@@ -67,4 +68,11 @@ func GetNullableInt64(nullValue *sql.NullInt64) *int64 {
 	} else {
 		return nil
 	}
+}
+
+func StringVal[T ~int | ~int8 | ~int16 | ~int32 |
+~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 |
+~uint64 | ~float32 | ~float64](num T) string {
+	
+	return fmt.Sprint(num)
 }

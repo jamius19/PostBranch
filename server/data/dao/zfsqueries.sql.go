@@ -34,23 +34,32 @@ func (q *Queries) CreateDataset(ctx context.Context, arg CreateDatasetParams) (Z
 }
 
 const createPool = `-- name: CreatePool :one
-INSERT INTO zfs_pool (name, path)
-VALUES (?, ?)
-RETURNING id, path, name, created_at, updated_at
+INSERT INTO zfs_pool (name, path, size_in_mb, mount_path)
+VALUES (?, ?, ?, ?)
+RETURNING id, path, size_in_mb, name, mount_path, created_at, updated_at
 `
 
 type CreatePoolParams struct {
-	Name string
-	Path string
+	Name      string
+	Path      string
+	SizeInMb  int64
+	MountPath string
 }
 
 func (q *Queries) CreatePool(ctx context.Context, arg CreatePoolParams) (ZfsPool, error) {
-	row := q.db.QueryRowContext(ctx, createPool, arg.Name, arg.Path)
+	row := q.db.QueryRowContext(ctx, createPool,
+		arg.Name,
+		arg.Path,
+		arg.SizeInMb,
+		arg.MountPath,
+	)
 	var i ZfsPool
 	err := row.Scan(
 		&i.ID,
 		&i.Path,
+		&i.SizeInMb,
 		&i.Name,
+		&i.MountPath,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -76,8 +85,27 @@ func (q *Queries) GetDataset(ctx context.Context, id int64) (ZfsDataset, error) 
 	return i, err
 }
 
+const getDatasetByName = `-- name: GetDatasetByName :one
+SELECT id, name, pool_id, created_at, updated_at
+FROM zfs_dataset
+WHERE name = ?
+`
+
+func (q *Queries) GetDatasetByName(ctx context.Context, name string) (ZfsDataset, error) {
+	row := q.db.QueryRowContext(ctx, getDatasetByName, name)
+	var i ZfsDataset
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PoolID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getPool = `-- name: GetPool :one
-SELECT id, path, name, created_at, updated_at
+SELECT id, path, size_in_mb, name, mount_path, created_at, updated_at
 FROM zfs_pool
 WHERE id = ?
 `
@@ -88,7 +116,9 @@ func (q *Queries) GetPool(ctx context.Context, id int64) (ZfsPool, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Path,
+		&i.SizeInMb,
 		&i.Name,
+		&i.MountPath,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -130,7 +160,7 @@ func (q *Queries) ListDataset(ctx context.Context) ([]ZfsDataset, error) {
 }
 
 const listPool = `-- name: ListPool :many
-SELECT id, path, name, created_at, updated_at
+SELECT id, path, size_in_mb, name, mount_path, created_at, updated_at
 FROM zfs_pool
 `
 
@@ -146,7 +176,9 @@ func (q *Queries) ListPool(ctx context.Context) ([]ZfsPool, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.Path,
+			&i.SizeInMb,
 			&i.Name,
+			&i.MountPath,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

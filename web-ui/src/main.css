@@ -85,6 +85,13 @@ h2 {
     color: #2a2a2a !important;
 }
 
+code {
+    font-family: "Space Mono", monospace;
+    font-weight: 400;
+    font-style: normal;
+    display: inline-block;
+}
+
 @layer base {
     :root {
         --background: 0 0% 100%;
@@ -93,7 +100,7 @@ h2 {
         --card-foreground: 240 10% 3.9%;
         --popover: 0 0% 100%;
         --popover-foreground: 240 10% 3.9%;
-        --primary: 240 5.9% 10%;
+        --primary: 212 70% 40%;
         --primary-foreground: 0 0% 98%;
         --secondary: 240 4.8% 95.9%;
         --secondary-foreground: 240 5.9% 10%;
@@ -105,7 +112,7 @@ h2 {
         --destructive-foreground: 0 0% 98%;
         --border: 240 5.9% 90%;
         --input: 240 5.9% 90%;
-        --ring: 240 10% 3.9%;
+        --ring: 212 90% 60%;
         --chart-1: 12 76% 61%;
         --chart-2: 173 58% 39%;
         --chart-3: 197 37% 24%;

@@ -24,8 +24,8 @@ WHERE rp.name = ?
    OR zp.path = ?;
 
 -- name: CreateRepo :one
-INSERT INTO repo (name, repo_type, size, size_unit, pool_id)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO repo (name, repo_type, pool_id)
+VALUES (?, ?, ?)
 RETURNING *;
 
 -- UpdateRepoPg :one

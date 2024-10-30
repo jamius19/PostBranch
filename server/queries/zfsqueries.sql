@@ -7,6 +7,11 @@ WHERE id = ?;
 SELECT *
 FROM zfs_dataset;
 
+-- name: GetDatasetByName :one
+SELECT *
+FROM zfs_dataset
+WHERE name = ?;
+
 -- name: CreateDataset :one
 INSERT INTO zfs_dataset (name, pool_id)
 VALUES (?, ?)
@@ -22,6 +27,6 @@ SELECT *
 FROM zfs_pool;
 
 -- name: CreatePool :one
-INSERT INTO zfs_pool (name, path)
-VALUES (?, ?)
+INSERT INTO zfs_pool (name, path, size_in_mb, mount_path)
+VALUES (?, ?, ?, ?)
 RETURNING *;

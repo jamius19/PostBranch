@@ -3,6 +3,7 @@ package responseerror
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 const ErrorsContextKey = "requestErrors"
@@ -26,7 +27,12 @@ func AddError(ctx context.Context, error string) {
 
 func AddAndGetErrors(ctx context.Context, error string) *[]string {
 	requestErrors := ctx.Value(ErrorsContextKey).(*RequestErrors)
-	requestErrors.Add(error)
+
+	if strings.Contains(error, "\n") {
+		requestErrors.Errors = append(requestErrors.Errors, strings.Split(error, "\n")...)
+	} else {
+		requestErrors.Add(error)
+	}
 
 	return &requestErrors.Errors
 }

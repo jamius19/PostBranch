@@ -1,5 +1,4 @@
 import {z} from "zod";
-import {useForm} from "react-hook-form";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {Input} from "@/components/ui/input.tsx";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select.tsx";
@@ -14,12 +13,13 @@ import {
     FormMessage
 } from "@/components/ui/form.tsx";
 import {RepoInitDto, RepoType} from "@/@types/repo/repo-init-dto.ts";
-import {useMutation, useQuery} from "@tanstack/react-query";
-import {initRepo, listRepoNames, listRepos} from "@/service/repo-service.ts";
+import {useQuery} from "@tanstack/react-query";
+import {initRepo, listRepos} from "@/service/repo-service.ts";
 import {
     Breadcrumb,
     BreadcrumbItem,
-    BreadcrumbList, BreadcrumbPage,
+    BreadcrumbList,
+    BreadcrumbPage,
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
@@ -27,18 +27,20 @@ import {generateName} from '@criblinc/docker-names'
 import Spinner from "@/components/Spinner.tsx";
 import {ArrowRight, Check} from "lucide-react";
 import {getRandomInt} from "@/util/lib.ts";
-import {useEffect, useRef, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import {Link} from "react-router-dom";
-import {Slide, toast} from "react-toastify";
-
-const virtualSchema = z.object({
-    repoType: z.literal("virtual"),
-    size: z.number().positive("Size value must be greater than 0"),
-    sizeUnit: z.enum(["K", "M", "G"])
-});
+import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
+import StorageSlider from "@/components/storage-slider.tsx";
+import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 
 const blockSchema = z.object({
     repoType: z.literal("block"),
+});
+
+const virtualSchema = z.object({
+    repoType: z.literal("virtual"),
+    sizeInMb: z.number({message: "Size value must be in the format (550MB, 3.5GB, 1TB)"})
+        .min(256, "Minimum size value is 256 Megabytes")
 });
 
 const RepoSetup = () => {
@@ -53,17 +55,23 @@ const RepoSetup = () => {
         queryFn: listRepos,
     });
 
-    const repoUpdate = useMutation({
-        mutationFn: initRepo
+    const repoInit = useNotifiableMutation({
+        mutationKey: ["repo-init"],
+        mutationFn: initRepo,
+        messages: {
+            pending: "Creating repository",
+            success: "Repository created successfully",
+        },
+        invalidates: ["repo-list"],
     });
 
     const [nameUpdated, setNameUpdated] = useState(false)
 
     const generatedName = generateName();
-    const repoInitSuccess = repoUpdate.isSuccess;
-    const repoInitPending = repoUpdate.isPending;
+    const repoInitSuccess = repoInit.isSuccess;
+    const repoInitPending = repoInit.isPending;
 
-    const baseFormSchema = z.object({
+    const baseFormSchema = useMemo(() => z.object({
         name: z.string()
             .min(1, "Name is required")
             .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens")
@@ -71,67 +79,70 @@ const RepoSetup = () => {
                 "Repository with the same name already exists"),
         path: z.string()
             .min(1, "Path is required")
-            .regex(/^\/\S+$/, "Path must start with / and cannot contain spaces")
+            .refine(value => value.startsWith("/") && !value.endsWith("/"), {
+                message: "Path must start with '/' and not end with '/'",
+            })
+            .refine(value => !value.includes(" "), {
+                message: "Path path must not contain spaces",
+            })
             .refine(val => !reposQuery.data?.data?.some(repo => repo.path === val),
                 "Repository with the same path already exists"),
-    });
+    }), [reposQuery]);
 
-    const formSchema = z.discriminatedUnion("repoType", [virtualSchema, blockSchema])
-        .and(baseFormSchema);
+    const formSchema = useMemo(
+        () => z.discriminatedUnion("repoType", [virtualSchema, blockSchema]).and(baseFormSchema),
+        [baseFormSchema]
+    );
 
-    const defaultFormValues: RepoInitDto = {
+    const defaultFormValues = useMemo<RepoInitDto>(() => ({
         name: generatedName,
         repoType: "virtual",
         path: getVirtualPath(generatedName),
-        size: 100,
-        sizeUnit: "M"
-    };
+        sizeInMb: 1024,
+    }), [generatedName]);
 
-    const form = useForm<RepoInitDto>({
+    const repoForm = useAppForm<RepoInitDto>({
         resolver: zodResolver(formSchema),
         defaultValues: defaultFormValues,
         mode: "onChange"
     });
 
-    const repoType = form.watch("repoType");
+    const repoType = repoForm.watch("repoType");
 
-    const onSubmit = async (data: RepoInitDto) => {
+    const onSubmit = useCallback(async (data: RepoInitDto) => {
         console.log(data);
-        repoUpdate.mutate(data);
-    };
+        await repoInit.mutateAsync(data);
+    }, [repoInit]);
 
-    const clearVirtualStorageValues = (value: RepoType) => {
+    const clearVirtualStorageValues = useCallback((value: RepoType) => {
         if (value === 'block') {
-            form.setValue("size", undefined);
-            form.setValue("sizeUnit", undefined);
-            form.setValue("path", "")
+            repoForm.setValue("path", "")
         } else {
-            form.setValue("size", 1);
-            form.setValue("sizeUnit", 'G');
-            form.setValue("path", "/var/lib/post-branch/virtualdisk01.img")
+            repoForm.setValue("path", getVirtualPath(repoForm.getValues().name));
         }
-    }
+    }, [repoForm]);
 
     useEffect(() => {
         if (reposQuery.isSuccess) {
-            const needsNewName = reposQuery.data.data?.some(repo => repo.name === generatedName);
+            const needsNewName = reposQuery
+                .data
+                .data
+                ?.some(repo => repo.name === generatedName);
 
             if (needsNewName) {
-                const newName = generateName();
-                form.setValue("name", newName);
-                form.setValue("path", getVirtualPath(newName));
+                let newName = generateName();
+
+                while (reposQuery.data.data?.some(repo => repo.name === newName)) {
+                    newName = generateName();
+                }
+
+                repoForm.setValue("name", newName);
+                repoForm.setValue("path", getVirtualPath(newName));
             }
 
             setNameUpdated(true);
         }
-    }, [reposQuery.isSuccess]);
-
-    useEffect(() => {
-        if (repoUpdate.isError) {
-            toast.error(repoUpdate.error.message);
-        }
-
-    }, [repoUpdate.isError]);
+    }, [generatedName, repoForm, reposQuery.data, reposQuery.isSuccess]);
 
     if (reposQuery.isPending || !nameUpdated) {
         return <Spinner/>;
@@ -149,36 +160,33 @@ const RepoSetup = () => {
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            Import Postgres
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator>
-                            <ChevronRightIcon/>
-                        </BreadcrumbSeparator>
-                        <BreadcrumbItem>
-                            Done
+                            Import Data
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
             <h1 className={"mb-10"}>Repository Setup</h1>
 
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="w-2/3 space-y-8">
+            <Form {...repoForm}>
+                <form
+                    onSubmit={repoForm.handleSubmit(onSubmit)}
+                    onKeyDown={repoForm.disableSubmit}
+                    className="w-2/3 space-y-8">
 
                     <FormField
-                        disabled={repoInitPending || repoInitSuccess}
-                        control={form.control}
+                        control={repoForm.control}
                         name="name"
                         render={({field}) => (
                             <FormItem>
                                 <FormLabel>Repository Name</FormLabel>
                                 <FormControl>
                                     <Input {...field}
+                                           disabled={repoInitPending || repoInitSuccess}
                                            placeholder="Enter Repository Name"
                                            spellCheck="false"
                                            onChange={e => {
-                                               e.target.value = e.target.value.toLowerCase().trim();
-                                               field.onChange(e);
+                                               const val: string = e.target.value.toLowerCase().trim();
+                                               field.onChange(val);
                                            }}/>
                                 </FormControl>
                                 <FormDescription>
@@ -190,7 +198,7 @@ const RepoSetup = () => {
                     />
 
                     <FormField
-                        control={form.control}
+                        control={repoForm.control}
                         name="repoType"
                         render={({field}) => (
                             <FormItem className="flex-1">
@@ -215,7 +223,7 @@ const RepoSetup = () => {
                                 <FormDescription>
                                     <span>Select the desired storage type for the repository</span><br/>
                                     <span className={"text-zinc-400"}>
-                                        If you don't have any external drive, choose the <b>Virtual
+                                        If you don&apos;t have any external drive, choose the <b>Virtual
                                         Storage</b> option</span>
                                 </FormDescription>
                                 <FormMessage/>
@@ -224,11 +232,13 @@ const RepoSetup = () => {
                     />
 
                     <FormField
-                        control={form.control}
+                        control={repoForm.control}
                         name="path"
                         render={({field}) => (
                             <FormItem>
-                                <FormLabel>{repoType === 'virtual' ? "Repository Path" : "Block Storage Path"}</FormLabel>
+                                <FormLabel>
+                                    {repoType === 'virtual' ? "Repository Path" : "Block Storage Path"}
+                                </FormLabel>
                                 <FormControl>
                                     <Input
                                         {...field}
@@ -237,13 +247,13 @@ const RepoSetup = () => {
                                         placeholder={repoType === 'virtual' ? "Enter repository path" : "/dev/vdb"}
                                         spellCheck="false"
                                         onChange={e => {
-                                            e.target.value = e.target.value.trim();
-                                            field.onChange(e);
+                                            const val: string = e.target.value.trim();
+                                            field.onChange(val);
                                         }}/>
                                 </FormControl>
                                 <FormDescription>
-                                    Enter the
-                                    path {repoType === 'virtual' ? 'for the virtual repository' : 'of the block storage'}
+                                    Enter the path&nbsp;
+                                    {repoType === 'virtual' ? 'for the virtual repository' : 'of the block storage'}
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -252,57 +262,9 @@ const RepoSetup = () => {
 
                     {repoType === 'virtual' && (
                         <div className="flex gap-4">
-                            <FormField
+                            <StorageSlider
                                 disabled={repoInitPending || repoInitSuccess}
-                                control={form.control}
-                                name="size"
-                                render={({field}) => (
-                                    <FormItem className="flex-1">
-                                        <FormLabel>Size</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                type="number"
-                                                placeholder="Enter size"
-                                                {...field}
-                                                onChange={e => field.onChange(Number(e.target.value))}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            Enter the size of the virtual disk
-                                        </FormDescription>
-                                        <FormMessage/>
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="sizeUnit"
-                                render={({field}) => (
-                                    <FormItem className="flex-1">
-                                        <FormLabel>Size Unit</FormLabel>
-                                        <Select
-                                            disabled={repoInitPending || repoInitSuccess}
-                                            onValueChange={field.onChange}
-                                            defaultValue={field.value}>
-                                            <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select unit"/>
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="K">KB</SelectItem>
-                                                <SelectItem value="M">MB</SelectItem>
-                                                <SelectItem value="G">GB</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormDescription>
-                                            Select the unit for the disk size
-                                        </FormDescription>
-                                        <FormMessage/>
-                                    </FormItem>
-                                )}
-                            />
+                                name={"sizeInMb"}/>
                         </div>
                     )}
 
@@ -318,7 +280,7 @@ const RepoSetup = () => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Link to={`/repo/setup/${repoUpdate.data.data!.id}/postgres`}>
+                            <Link to={`/repo/setup/${repoInit.data.data!.id}/postgres`}>
                                 <Button>
                                     Setup Postgres <ArrowRight/>
                                 </Button>
