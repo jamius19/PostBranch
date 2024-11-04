@@ -11,4 +11,7 @@ DELETE
 from repo;
 
 DELETE
-FROM zfs_pool;
+FROM branch;
+
+DELETE
+FROM sqlite_sequence;

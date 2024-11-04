@@ -1,4 +1,4 @@
--- name: GetPgById :one
+-- name: GetPg :one
 SELECT *
 FROM pg
 WHERE id = ?;

@@ -74,11 +74,13 @@ const RepoSetup = () => {
     const baseFormSchema = useMemo(() => z.object({
         name: z.string()
             .min(1, "Name is required")
+            .max(50, "Name must be less than 50 characters")
             .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, "Name must start with a letter, end with a letter or number, and can only contain letters, numbers, and hyphens")
             .refine(val => !reposQuery.data?.data?.some(repo => repo.name === val),
                 "Repository with the same name already exists"),
         path: z.string()
             .min(1, "Path is required")
+            .max(2000, "Path must be less than 2000 characters")
             .refine(value => value.startsWith("/") && !value.endsWith("/"), {
                 message: "Path must start with '/' and not end with '/'",
             })

@@ -2,6 +2,11 @@ import {useQuery} from "@tanstack/react-query";
 import {Link, Navigate} from "react-router-dom";
 import {listRepos} from "@/service/repo-service.ts";
 import {Button} from "@/components/ui/button.tsx";
+import RepoInfoCard from "@/components/repo-info-card/repo-info-card.tsx";
+import Spinner from "@/components/Spinner.tsx";
+import {clsx} from "clsx";
+import styles from "./repo.module.scss";
+import {ArrowRight} from "lucide-react";
 
 const Repo = () => {
     const {isPending, data: response, error} = useQuery({
@@ -15,31 +20,35 @@ const Repo = () => {
 
     if (isPending) {
         return (
-            <>Loading...</>
+            <Spinner/>
         );
     }
 
     return (
         <>
-            {response.data ? (
-                <>
-                    Repositories found!
-                    {response?.data.map(repo => repo.name)}
-
-                    <div>
-                        <Link to={"/repo/setup"}>
-                            <Button className={"mt-2"}>Add</Button>
-                        </Link>
+            {!!response.data && !!response.data.length && (
+                <div className={"mb-12"}>
+                    <div className={clsx("grid gap-6", styles.repoGrid)}>
+                        {response?.data.map(repo => (
+                            <RepoInfoCard key={repo.id} repo={repo}/>
+                        ))}
                     </div>
-                </>
-            ) : (
-                <>
-                    <p>No Postgres Repositories found.</p>
-                    <Link to={"/repo/setup"}>
-                        <Button className={"mt-2"}>Add</Button>
-                    </Link>
-                </>
+                </div>
             )}
+
+
+            <div>
+                {!!response.data && !response.data.length && (
+                    <p className={"mb-4"}>No repositories found.</p>
+                )}
+
+                <Link to={"/repo/setup"}>
+                    <Button>
+                        Create Repository
+                        <ArrowRight/>
+                    </Button>
+                </Link>
+            </div>
         </>
     )
 }

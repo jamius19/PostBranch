@@ -75,14 +75,22 @@ h2 {
 
 .mono {
     font-family: "Space Mono", monospace;
-    font-weight: 400;
     font-style: normal;
+}
+
+.Toastify__toast-container {
+    width: 350px;
 }
 
 .Toastify__toast {
     font-family: "Nunito", sans-serif !important;
     font-size: 15px !important;
     color: #2a2a2a !important;
+}
+
+.Toastify__toast-body > div:last-child {
+    margin-right: 10px;
+    margin-left: 5px;
 }
 
 code {
@@ -95,12 +103,12 @@ code {
 @layer base {
     :root {
         --background: 0 0% 100%;
-        --foreground: 240 10% 3.9%;
+        --foreground: 240, 7%, 19%;
         --card: 0 0% 100%;
         --card-foreground: 240 10% 3.9%;
         --popover: 0 0% 100%;
         --popover-foreground: 240 10% 3.9%;
-        --primary: 212 70% 40%;
+        --primary: 215 28% 17%;
         --primary-foreground: 0 0% 98%;
         --secondary: 240 4.8% 95.9%;
         --secondary-foreground: 240 5.9% 10%;
@@ -112,7 +120,7 @@ code {
         --destructive-foreground: 0 0% 98%;
         --border: 240 5.9% 90%;
         --input: 240 5.9% 90%;
-        --ring: 212 90% 60%;
+        --ring: 215 5% 50%;
         --chart-1: 12 76% 61%;
         --chart-2: 173 58% 39%;
         --chart-3: 197 37% 24%;

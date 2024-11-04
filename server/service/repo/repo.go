@@ -12,7 +12,7 @@ import (
 
 var log = logger.Logger
 
-func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.RepoResponse, error) {
+func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.Response, error) {
 	if repoinit.RepoType == "virtual" {
 		log.Infof("Initializing virtual repo")
 
@@ -41,13 +41,13 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.RepoResp
 			return nil, responseerror.Clarify("Failed to create repository")
 		}
 
-		repoResponse := repo.RepoResponse{
+		repoResponse := repo.Response{
 			ID:        createdRepo.ID,
 			Name:      createdRepo.Name,
 			Path:      pool.Path,
 			RepoType:  createdRepo.RepoType,
 			SizeInMb:  pool.SizeInMb,
-			PgID:      nil,
+			Pg:        nil,
 			PoolID:    pool.ID,
 			CreatedAt: createdRepo.CreatedAt,
 			UpdatedAt: createdRepo.UpdatedAt,

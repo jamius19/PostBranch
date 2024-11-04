@@ -6,7 +6,7 @@ import {
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
-import {Navigate, useParams} from "react-router-dom";
+import {Link, Navigate, useParams} from "react-router-dom";
 import {z} from "zod";
 import {RepoPgInitDto} from "@/@types/repo/repo-pg-init-dto.ts";
 import {Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage} from "@/components/ui/form";
@@ -17,8 +17,10 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import {importPg} from "@/service/repo-service.ts";
-import {useCallback} from "react";
+import React, {useCallback} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
+import Spinner from "@/components/Spinner.tsx";
+import {ArrowRight, Check} from "lucide-react";
 
 const baseFormSchema = z.object({
     version: z.number()
@@ -33,19 +35,22 @@ const baseFormSchema = z.object({
             message: "PostgreSQL Path must start with '/' and not end with '/'",
         }),
     stopPostgres: z.boolean({message: "Required"}),
-});
-
-const localConnectionFormSchema = z.object({
-    customConnection: z.literal(false),
-    postgresUser: z.string()
-        .min(1, "PostgreSQL user is required")
+    postgresOsUser: z.string()
+        .min(1, "PostgreSQL OS user is required")
+        .regex(/^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$/, {
+            message: "PostgreSQL OS user must be a valid Unix username",
+        })
         .refine(value => !value.includes(" "), {
-            message: "PostgreSQL user must not contain spaces",
+            message: "PostgreSQL OS user must not contain spaces",
         }),
 });
 
+const localConnectionFormSchema = z.object({
+    connectionType: z.literal("local"),
+});
+
 const customConnectionFormSchema = z.object({
-    customConnection: z.literal(true),
+    connectionType: z.literal("host"),
     host: z.string()
         .min(1, "Database host is required")
         .refine(value => !value.includes(" "), {
@@ -54,7 +59,7 @@ const customConnectionFormSchema = z.object({
     port: z.number()
         .min(1, "Database port is required")
         .max(65535, "Database port must be between 1 and 65535"),
-    username: z.string()
+    dbUsername: z.string()
         .min(1, "Database username is required")
         .refine(value => !value.includes(" "), {
             message: "Database username must not contain spaces",
@@ -63,18 +68,20 @@ const customConnectionFormSchema = z.object({
         .min(1, "Database password is required"),
 });
 
-const formSchema = z.discriminatedUnion("customConnection", [localConnectionFormSchema, customConnectionFormSchema])
-    .and(baseFormSchema);
+const formSchema = z.discriminatedUnion(
+    "connectionType",
+    [localConnectionFormSchema, customConnectionFormSchema],
+).and(baseFormSchema);
 
 const defaultValues: RepoPgInitDto = {
     version: 16,
     postgresPath: "",
     stopPostgres: true,
-    customConnection: false,
-    postgresUser: "postgres",
+    connectionType: "host",
+    postgresOsUser: "postgres",
     host: "localhost",
     port: 5432,
-    username: "postgres",
+    dbUsername: "postgres",
     password: "",
 };
 
@@ -102,11 +109,14 @@ const PgSetup = () => {
         await pgImport.mutateAsync({repoId, repoPgInitDto});
     }, [pgImport, repoId]);
 
-    const customConnectionSelected = pgForm.watch("customConnection");
+    const hostConnectionSelected = pgForm.watch("connectionType") === "host";
 
     if (!repoId) {
         return <Navigate to={"/error"}/>;
     }
+
+    const repoInitSuccess = pgImport.isSuccess;
+    const repoInitPending = pgImport.isPending;
 
     return (
         <div>
@@ -140,6 +150,7 @@ const PgSetup = () => {
                             <FormItem>
                                 <FormLabel>Postgres Version</FormLabel>
                                 <Select
+                                    disabled={repoInitPending || repoInitSuccess}
                                     defaultValue={String(field.value)}
                                     onValueChange={(value: string) => {
                                         field.onChange(Number(value));
@@ -171,6 +182,7 @@ const PgSetup = () => {
                                 <FormLabel>Postgres Installation Path</FormLabel>
                                 <FormControl>
                                     <Input {...field}
+                                           disabled={repoInitPending || repoInitSuccess}
                                            spellCheck="false"
                                            placeholder={"/usr/lib/postgresql/16"}
                                            onChange={e => {
@@ -193,6 +205,7 @@ const PgSetup = () => {
                             <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                                 <FormControl>
                                     <Checkbox
+                                        disabled={repoInitPending || repoInitSuccess}
                                         checked={field.value}
                                         onCheckedChange={field.onChange}
                                     />
@@ -214,36 +227,39 @@ const PgSetup = () => {
 
                     <FormField
                         control={pgForm.control}
-                        name="customConnection"
+                        name="connectionType"
                         render={({field}) => (
                             <FormItem>
                                 <FormLabel>Connection Settings</FormLabel>
                                 <Select
-                                    defaultValue={String(field.value)}
-                                    onValueChange={value => {
-                                        const val: boolean = value.toLowerCase() === "true";
-                                        field.onChange(val);
-                                    }}>
+                                    disabled={repoInitPending || repoInitSuccess}
+                                    defaultValue={field.value}
+                                    onValueChange={field.onChange}>
                                     <FormControl>
                                         <SelectTrigger>
                                             <SelectValue placeholder="How to connect to PostgreSQL?"/>
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="false">Use Local Connection</SelectItem>
-                                        <SelectItem value="true">Use Custom Connection Configuration</SelectItem>
+                                        <SelectItem value="local">Use Local Connection</SelectItem>
+                                        <SelectItem value="host">Use Custom Connection Configuration</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <FormDescription>
                                     <span className={"block"}>
                                         Local connection uses the PostgreSQL operating system user to connect to the
-                                        database <i><b>without password</b></i><br/>
-                                    This is recommended for typical PostgreSQL installations with PostBranch running
-                                        on the same machine
+                                        database using <code className={"font-bold"}>trust</code> or <code
+                                        className={"font-bold"}>peer</code> based auth.<br/>
+
                                     </span>
 
-                                    <span className={"block mt-1.5"}>
-                                        In case of a custom connection, you can provide a custom connection configuration
+                                    <span className={"block mt-2"}>
+                                        In case of a custom connection, you can provide a custom connection configuration.
+                                    </span>
+
+                                    <span className={"block mt-2"}>
+                                       For either case, the given PostgreSQL user must have <code
+                                        className={"font-bold"}>superuser</code> privileges.
                                     </span>
                                 </FormDescription>
                                 <FormMessage/>
@@ -251,7 +267,33 @@ const PgSetup = () => {
                         )}
                     />
 
-                    {customConnectionSelected ? (
+                    <FormField
+                        control={pgForm.control}
+                        name="postgresOsUser"
+                        render={({field}) => (
+                            <FormItem>
+                                <FormLabel>Postgres OS User</FormLabel>
+                                <FormControl>
+                                    <Input {...field}
+                                           disabled={repoInitPending || repoInitSuccess}
+                                           spellCheck="false"
+                                           placeholder={"postgres"}
+                                           onChange={e => {
+                                               const val: string = e.target.value.trim();
+                                               field.onChange(val);
+                                           }}/>
+                                </FormControl>
+                                <FormDescription>
+                                    Username of the Local PostgreSQL operating system account.<br/>
+                                    If you&#39;re unsure, use the default value <code
+                                    className={"font-bold"}>postgres</code>
+                                </FormDescription>
+                                <FormMessage/>
+                            </FormItem>
+                        )}
+                    />
+
+                    {hostConnectionSelected && (
                         <>
                             <div className={"flex gap-4"}>
                                 <FormField
@@ -262,6 +304,7 @@ const PgSetup = () => {
                                             <FormLabel>Host</FormLabel>
                                             <FormControl>
                                                 <Input {...field}
+                                                       disabled={repoInitPending || repoInitSuccess}
                                                        readOnly={true}
                                                        spellCheck="false"
                                                        placeholder="localhost"/>
@@ -283,6 +326,7 @@ const PgSetup = () => {
                                             <FormLabel>Port</FormLabel>
                                             <FormControl>
                                                 <Input {...field}
+                                                       disabled={repoInitPending || repoInitSuccess}
                                                        type="number"
                                                        placeholder="5432"
                                                        onChange={(event) => {
@@ -301,12 +345,13 @@ const PgSetup = () => {
 
                             <FormField
                                 control={pgForm.control}
-                                name="username"
+                                name="dbUsername"
                                 render={({field}) => (
                                     <FormItem>
                                         <FormLabel>Username</FormLabel>
                                         <FormControl>
                                             <Input {...field}
+                                                   disabled={repoInitPending || repoInitSuccess}
                                                    spellCheck="false"
                                                    placeholder="postgres"/>
                                         </FormControl>
@@ -326,44 +371,39 @@ const PgSetup = () => {
                                         <FormLabel>Password</FormLabel>
                                         <FormControl>
                                             <Input {...field}
+                                                   disabled={repoInitPending || repoInitSuccess}
                                                    placeholder="••••"
                                                    type="password"/>
                                         </FormControl>
                                         <FormDescription>
-                                            PostgreSQL user password
+                                            PostgreSQL user password <i>(This will NOT be saved)</i>
                                         </FormDescription>
                                         <FormMessage/>
                                     </FormItem>
                                 )}
                             />
                         </>
-                    ) : (
-                        <FormField
-                            control={pgForm.control}
-                            name="postgresUser"
-                            render={({field}) => (
-                                <FormItem>
-                                    <FormLabel>Postgres OS User</FormLabel>
-                                    <FormControl>
-                                        <Input {...field}
-                                               spellCheck="false"
-                                               placeholder={"postgres"}
-                                               onChange={e => {
-                                                   const val: string = e.target.value.trim();
-                                                   field.onChange(val);
-                                               }}/>
-                                    </FormControl>
-                                    <FormDescription>
-                                        Local PostgreSQL operating system account&#39;s username<br/>
-                                        If you&#39;re unsure, use the default value <i><b>postgres</b></i>
-                                    </FormDescription>
-                                    <FormMessage/>
-                                </FormItem>
-                            )}
-                        />
                     )}
 
-                    <Button type="submit">Import Postgres Data</Button>
+                    <div className={"flex gap-4"}>
+                        <Button
+                            type="submit"
+                            variant={repoInitSuccess ? "success" : "default"}
+                            disabled={repoInitPending || repoInitSuccess}>
+
+                            <Spinner isLoading={repoInitPending}/>
+                            {repoInitSuccess && <Check/>}
+                            {repoInitSuccess ? "Import Started" : "Import Postgres Data"}
+                        </Button>
+
+                        {repoInitSuccess && (
+                            <Link to={`/repo/${repoId}`}>
+                                <Button>
+                                    Go to Repo <ArrowRight/>
+                                </Button>
+                            </Link>
+                        )}
+                    </div>
                 </form>
             </Form>
 

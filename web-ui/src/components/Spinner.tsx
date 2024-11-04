@@ -1,11 +1,11 @@
 import {LoaderCircle} from "lucide-react";
 
-const Spinner = (props: { isLoading?: boolean }) => {
-    const {isLoading = true} = props;
+const Spinner = (props: { isLoading?: boolean, size?: number }) => {
+    const {isLoading = true, size = 24} = props;
 
     return (
         <>
-            {isLoading && <LoaderCircle className={"animate-spin"} color={"#63A8F5"}/>}
+            {isLoading && <LoaderCircle size={size} className={"animate-spin"} color={"#63A8F5"}/>}
         </>
     );
 };

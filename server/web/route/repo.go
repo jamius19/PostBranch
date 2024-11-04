@@ -62,7 +62,7 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := dto.Response[repoDto.RepoResponse]{
+	response := dto.Response[repoDto.Response]{
 		Data:  repoResponse,
 		Error: nil,
 	}
@@ -79,15 +79,61 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var reposResponse []repoDto.RepoResponse
+	reposResponse := []repoDto.Response{}
 	for i := range repos {
-		repoResponse := repoDto.RepoResponse{
+		var pgInfo *repoDto.Pg = nil
+		branchesInfo := []repoDto.Branch{}
+
+		if repos[i].Repo.PgID.Valid {
+			pg, err := data.Fetcher.GetPg(r.Context(), repos[i].Repo.PgID.Int64)
+			if err != nil {
+				log.Errorf("Failed to load pg info for repo %v", repos[i].Repo)
+				util.WriteError(
+					w,
+					r,
+					responseerror.Clarify("Failed to load repositories"),
+					http.StatusInternalServerError,
+				)
+				return
+			}
+
+			pgInfo = &repoDto.Pg{
+				PgID:    repos[i].Repo.PgID.Int64,
+				Version: pg.Version,
+				Status:  pg.Status,
+				Output:  util.GetNullableString(&pg.Output),
+			}
+
+			branches, err := data.Fetcher.ListBranchesByRepoId(r.Context(), repos[i].Repo.ID)
+
+			if err != nil {
+				log.Error("Failed to load branches for repo %v", repos[i].Repo)
+				util.WriteError(
+					w,
+					r,
+					responseerror.Clarify("Failed to load repositories"),
+					http.StatusInternalServerError,
+				)
+				return
+			}
+
+			for _, branch := range branches {
+				branchesInfo = append(branchesInfo, repoDto.Branch{
+					Id:       branch.ID,
+					Name:     branch.Name,
+					ParentId: util.GetNullableInt64(&branch.ParentID),
+				})
+			}
+		}
+
+		repoResponse := repoDto.Response{
 			ID:        repos[i].Repo.ID,
 			Name:      repos[i].Repo.Name,
 			Path:      repos[i].ZfsPool.Path,
 			RepoType:  repos[i].Repo.RepoType,
 			SizeInMb:  repos[i].ZfsPool.SizeInMb,
-			PgID:      util.GetNullableInt64(&repos[i].Repo.PgID),
+			Pg:        pgInfo,
+			Branches:  branchesInfo,
 			PoolID:    repos[i].Repo.PoolID,
 			CreatedAt: repos[i].Repo.CreatedAt,
 			UpdatedAt: repos[i].Repo.UpdatedAt,
@@ -96,26 +142,8 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		reposResponse = append(reposResponse, repoResponse)
 	}
 
-	response := dto.Response[[]repoDto.RepoResponse]{
+	response := dto.Response[[]repoDto.Response]{
 		Data:   &reposResponse,
-		Error:  nil,
-		IsList: true,
-	}
-
-	util.WriteResponse(w, r, response, http.StatusOK)
-}
-
-func ListRepoNames(w http.ResponseWriter, r *http.Request) {
-	log.Info("Fetching repo names")
-
-	names, err := data.Fetcher.ListRepoNames(r.Context())
-	if err != nil {
-		log.Errorf("Error fetching repo names. Error: %v", err)
-		util.WriteError(w, r, responseerror.Clarify("Error Fetching repo names"), http.StatusInternalServerError)
-	}
-
-	response := dto.Response[[]string]{
-		Data:   &names,
 		Error:  nil,
 		IsList: true,
 	}

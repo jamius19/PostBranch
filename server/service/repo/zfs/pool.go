@@ -67,7 +67,7 @@ func pool(ctx context.Context, repoinit *repo.InitDto, path string) (*dao.ZfsPoo
 	//
 	// Run the Commands
 	//
-	_, err := cmd.Single("create-zpool", false, "zpool", "create", "-m", mountPath, repoinit.Name, path)
+	_, err := cmd.Single("create-zpool", false, false, "zpool", "create", "-m", mountPath, repoinit.Name, path)
 	if err != nil {
 		log.Errorf("Failed to create pool: %s", err)
 		return nil, err

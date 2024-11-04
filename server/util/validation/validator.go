@@ -18,7 +18,7 @@ func init() {
 		log.Fatalf("Failed to register custom validation function: %s", err)
 	}
 
-	err = validate.RegisterValidation("pgInitCon", repo.PgInitValidation)
+	err = validate.RegisterValidation("pgInitCon", repo.PgInitCheckValidation)
 	if err != nil {
 		log.Fatalf("Failed to register custom validation function: %s", err)
 	}

@@ -7,6 +7,7 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 )
 
 const countRepo = `-- name: CountRepo :one
@@ -41,6 +42,39 @@ func (q *Queries) CountRepoByNameOrPath(ctx context.Context, arg CountRepoByName
 	return count, err
 }
 
+const createBranch = `-- name: CreateBranch :one
+INSERT INTO branch (name, repo_id, parent_id, dataset_id)
+VALUES (?, ?, ?, ?)
+RETURNING id, name, repo_id, parent_id, dataset_id, created_at, updated_at
+`
+
+type CreateBranchParams struct {
+	Name      string
+	RepoID    int64
+	ParentID  sql.NullInt64
+	DatasetID int64
+}
+
+func (q *Queries) CreateBranch(ctx context.Context, arg CreateBranchParams) (Branch, error) {
+	row := q.db.QueryRowContext(ctx, createBranch,
+		arg.Name,
+		arg.RepoID,
+		arg.ParentID,
+		arg.DatasetID,
+	)
+	var i Branch
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.RepoID,
+		&i.ParentID,
+		&i.DatasetID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createRepo = `-- name: CreateRepo :one
 INSERT INTO repo (name, repo_type, pool_id)
 VALUES (?, ?, ?)
@@ -69,30 +103,81 @@ func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, e
 }
 
 const getRepo = `-- name: GetRepo :one
-SELECT id, name, repo_type, pool_id, pg_id, created_at, updated_at
-FROM repo
-WHERE id = ?
+SELECT rp.id, rp.name, rp.repo_type, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.size_in_mb, zp.name, zp.mount_path, zp.created_at, zp.updated_at
+FROM repo rp
+         JOIN zfs_pool zp on rp.pool_id = zp.id
+WHERE rp.id = ?
 `
 
-func (q *Queries) GetRepo(ctx context.Context, id int64) (Repo, error) {
+type GetRepoRow struct {
+	Repo    Repo
+	ZfsPool ZfsPool
+}
+
+func (q *Queries) GetRepo(ctx context.Context, id int64) (GetRepoRow, error) {
 	row := q.db.QueryRowContext(ctx, getRepo, id)
-	var i Repo
+	var i GetRepoRow
 	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.RepoType,
-		&i.PoolID,
-		&i.PgID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&i.Repo.ID,
+		&i.Repo.Name,
+		&i.Repo.RepoType,
+		&i.Repo.PoolID,
+		&i.Repo.PgID,
+		&i.Repo.CreatedAt,
+		&i.Repo.UpdatedAt,
+		&i.ZfsPool.ID,
+		&i.ZfsPool.Path,
+		&i.ZfsPool.SizeInMb,
+		&i.ZfsPool.Name,
+		&i.ZfsPool.MountPath,
+		&i.ZfsPool.CreatedAt,
+		&i.ZfsPool.UpdatedAt,
 	)
 	return i, err
+}
+
+const listBranchesByRepoId = `-- name: ListBranchesByRepoId :many
+SELECT id, name, repo_id, parent_id, dataset_id, created_at, updated_at
+FROM branch
+WHERE repo_id = ?
+`
+
+func (q *Queries) ListBranchesByRepoId(ctx context.Context, repoID int64) ([]Branch, error) {
+	rows, err := q.db.QueryContext(ctx, listBranchesByRepoId, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Branch
+	for rows.Next() {
+		var i Branch
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.RepoID,
+			&i.ParentID,
+			&i.DatasetID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRepo = `-- name: ListRepo :many
 SELECT rp.id, rp.name, rp.repo_type, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.size_in_mb, zp.name, zp.mount_path, zp.created_at, zp.updated_at
 FROM repo rp
          JOIN zfs_pool zp on rp.pool_id = zp.id
+ORDER BY rp.created_at DESC
 `
 
 type ListRepoRow struct {
@@ -138,30 +223,30 @@ func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
 	return items, nil
 }
 
-const listRepoNames = `-- name: ListRepoNames :many
-SELECT name
-FROM repo
+const updateRepoPg = `-- name: UpdateRepoPg :one
+UPDATE repo
+SET pg_id      = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, name, repo_type, pool_id, pg_id, created_at, updated_at
 `
 
-func (q *Queries) ListRepoNames(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listRepoNames)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		items = append(items, name)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type UpdateRepoPgParams struct {
+	PgID sql.NullInt64
+	ID   int64
+}
+
+func (q *Queries) UpdateRepoPg(ctx context.Context, arg UpdateRepoPgParams) (Repo, error) {
+	row := q.db.QueryRowContext(ctx, updateRepoPg, arg.PgID, arg.ID)
+	var i Repo
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.RepoType,
+		&i.PoolID,
+		&i.PgID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

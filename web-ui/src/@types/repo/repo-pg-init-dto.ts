@@ -2,10 +2,10 @@ export interface RepoPgInitDto {
     postgresPath: string;
     version: number;
     stopPostgres: boolean;
-    customConnection: boolean;
-    postgresUser: string;
+    connectionType: string;
+    postgresOsUser: string;
     host?: string;
     port?: number;
-    username?: string;
+    dbUsername?: string;
     password?: string;
 }

@@ -10,21 +10,27 @@ import (
 )
 
 type Command struct {
-	Name string
-	Args []string
+	Name      string
+	Args      []string
+	Sensitive bool
 }
 
 type CommandOutput struct {
-	Name   string
-	Output *string
-	Error  error
+	Name      string
+	Sensitive bool
+	Output    *string
+	Error     error
 }
 
 var log = logger.Logger
 
-func Single(key string, skipLog bool, name string, args ...string) (*string, error) {
+func Single(key string, skipLog bool, sensitive bool, name string, args ...string) (*string, error) {
 	if !skipLog {
-		log.Infof("[s] Executing %s command: %s %v", key, name, args)
+		if !sensitive {
+			log.Infof("[s] Executing %s command: %s %v", key, name, args)
+		} else {
+			log.Infof("[s] Executing %s command: %s *****", key, name)
+		}
 	}
 
 	cmd := exec.Command(name, args...)
@@ -32,7 +38,11 @@ func Single(key string, skipLog bool, name string, args ...string) (*string, err
 
 	if err != nil {
 		if !skipLog {
-			log.Errorf("[s] Error executing %s command: %s %v error: %s, output: %s", key, name, args, err, out)
+			if !sensitive {
+				log.Errorf("[s] Error executing %s command: %s %v error: %s, output: %s", key, name, args, err, out)
+			} else {
+				log.Errorf("[s] Error executing %s command: %s ***** error: %s", key, name, err)
+			}
 		}
 
 		outputStr := string(out)
@@ -41,7 +51,11 @@ func Single(key string, skipLog bool, name string, args ...string) (*string, err
 
 	output := string(out)
 	if !skipLog {
-		log.Infof("[s] Output for %s: %s", key, util.SafeStringVal(&output))
+		if !sensitive {
+			log.Infof("[s] Output for %s command: %s, output: %s", key, name, util.SafeStringVal(&output))
+		} else {
+			log.Infof("[s] Output for %s command: %s, output: *****", key, name)
+		}
 	}
 
 	return &output, nil
@@ -54,7 +68,7 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 
 	for el := cmds.Front(); el != nil; el = el.Next() {
 		command := el.Value
-		output, err := Single(el.Key, true, command.Name, command.Args...)
+		output, err := Single(el.Key, true, el.Value.Sensitive, command.Name, command.Args...)
 
 		if err != nil {
 			log.Errorf(
@@ -63,9 +77,10 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 			)
 
 			outputs.Set(el.Key, CommandOutput{
-				Name:   command.Name,
-				Output: output,
-				Error:  err,
+				Name:      command.Name,
+				Output:    output,
+				Error:     err,
+				Sensitive: command.Sensitive,
 			})
 
 			return outputs, err
@@ -73,9 +88,10 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 		}
 
 		outputs.Set(el.Key, CommandOutput{
-			Name:   command.Name,
-			Output: output,
-			Error:  nil,
+			Name:      command.Name,
+			Output:    output,
+			Error:     nil,
+			Sensitive: command.Sensitive,
 		})
 
 	}
@@ -86,8 +102,17 @@ func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap
 
 func Get(name string, args ...string) Command {
 	return Command{
-		Name: name,
-		Args: args,
+		Name:      name,
+		Args:      args,
+		Sensitive: false,
+	}
+}
+
+func GetSensitive(name string, args ...string) Command {
+	return Command{
+		Name:      name,
+		Args:      args,
+		Sensitive: true,
 	}
 }
 
@@ -95,6 +120,11 @@ func LogCmds(cmds *orderedmap.OrderedMap[string, Command]) {
 	log.Infof("[m] >>> Logging commands")
 
 	for el := cmds.Front(); el != nil; el = el.Next() {
+		if el.Value.Sensitive {
+			log.Infof("[m] Executing %s command: %s *****", el.Key, el.Value.Name)
+			continue
+		}
+
 		log.Infof("[m] Executing %s command: %s %s", el.Key, el.Value.Name, el.Value.Args)
 	}
 
@@ -105,6 +135,11 @@ func LogOutputs(outputs *orderedmap.OrderedMap[string, CommandOutput]) {
 	log.Infof("[m] >>> Logging outputs")
 
 	for el := outputs.Front(); el != nil; el = el.Next() {
+		if el.Value.Sensitive {
+			log.Infof("[m] Output for %s: ******", el.Key)
+			continue
+		}
+
 		log.Infof("[m] Output for %s: %s", el.Key, util.SafeStringVal(el.Value.Output))
 	}
 

@@ -70,9 +70,17 @@ func GetNullableInt64(nullValue *sql.NullInt64) *int64 {
 	}
 }
 
+func GetNullableString(nullValue *sql.NullString) *string {
+	if nullValue.Valid {
+		return &nullValue.String
+	} else {
+		return nil
+	}
+}
+
 func StringVal[T ~int | ~int8 | ~int16 | ~int32 |
-~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 |
-~uint64 | ~float32 | ~float64](num T) string {
-	
+	~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 |
+	~uint64 | ~float32 | ~float64](num T) string {
+
 	return fmt.Sprint(num)
 }

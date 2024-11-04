@@ -12,7 +12,7 @@ func EmptyDataset(ctx context.Context, pool *dao.ZfsPool, name string) (*dao.Zfs
 	log.Infof("ZFS Dataset init %v", *pool)
 
 	datasetName := fmt.Sprintf("%s/%s", pool.Name, name)
-	_, err := cmd.Single("create-dataset", false, "zfs", "create", datasetName)
+	_, err := cmd.Single("create-dataset", false, false, "zfs", "create", datasetName)
 	if err != nil {
 		log.Errorf("Failed to create dataset: %s", err)
 		return nil, err

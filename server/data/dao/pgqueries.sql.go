@@ -62,14 +62,14 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 	return i, err
 }
 
-const getPgById = `-- name: GetPgById :one
+const getPg = `-- name: GetPg :one
 SELECT id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
 FROM pg
 WHERE id = ?
 `
 
-func (q *Queries) GetPgById(ctx context.Context, id int64) (Pg, error) {
-	row := q.db.QueryRowContext(ctx, getPgById, id)
+func (q *Queries) GetPg(ctx context.Context, id int64) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, getPg, id)
 	var i Pg
 	err := row.Scan(
 		&i.ID,
