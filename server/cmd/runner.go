@@ -7,6 +7,7 @@ import (
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os/exec"
 	"strings"
+	"syscall"
 )
 
 type Command struct {
@@ -22,6 +23,8 @@ type CommandOutput struct {
 	Error     error
 }
 
+const EmptyOutput = ""
+
 var log = logger.Logger
 
 func Single(key string, skipLog bool, sensitive bool, name string, args ...string) (*string, error) {
@@ -34,6 +37,10 @@ func Single(key string, skipLog bool, sensitive bool, name string, args ...strin
 	}
 
 	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {

@@ -1,6 +1,9 @@
 import {RepoResponseDto} from "@/@types/repo/repo-dto.ts";
-import {Activity, Database, GitBranch} from "lucide-react";
+import {Activity, Box, Database, GitBranch} from "lucide-react";
 import {twMerge as tm} from "tailwind-merge";
+import {Link} from "react-router-dom";
+import {formatValue} from "@/util/lib.ts";
+import React from "react";
 
 interface RepoInfoCardProps {
     repo: RepoResponseDto;
@@ -20,47 +23,54 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
     }
 
     return (
-        <div
-            className={tm("cursor-pointer w-full h-full text-white hover:shadow-xl transition-all duration-500 rounded-lg shadow-lg p-6", bgClassNames)}>
-            <h3 className="font-title text mono font-bold">{repo.name}</h3>
+        <Link to={`/repo/${repo.id}`}>
+            <div
+                className={tm("cursor-pointer w-full h-full text-white hover:shadow-xl transition-all duration-500 rounded-lg shadow-lg p-6", bgClassNames)}>
+                <h3 className="font-title text mono font-bold">{repo.name}</h3>
 
-            <div className={"mt-3 text-[0.85rem]"}>
-                <GitBranch size={15} className={"inline-block relative top-[-1.5px]"}/>
-                <span className={"ml-2"}>
+                <div className={"mt-3 text-[0.85rem]"}>
+                    <GitBranch size={15} className={"inline-block relative top-[-1.5px]"}/>
+                    <span className={"ml-2"}>
                         {repo.branches.length ? `${repo.branches.length}` : "No"}&nbsp;
-                    {repo.branches.length > 1 ? "Branches" : "Branch"}
+                        {repo.branches.length > 1 ? "Branches" : "Branch"}
                     </span>
-            </div>
-            <div className={"mt-1 text-[0.85rem]"}>
-                <Database size={15} className={"inline-block relative top-[-1.5px]"}/>
-                {repo.pg ? (
-                    <span className={"ml-2"}>Postgres {repo.pg.version}</span>
-                ) : (
-                    <span className={"ml-2"}>Postgres not imported</span>
-                )}
-            </div>
+                </div>
+                <div className={"mt-1 text-[0.85rem]"}>
+                    <Database size={15} className={"inline-block relative top-[-1.5px]"}/>
+                    {repo.pg ? (
+                        <span className={"ml-2"}>Postgres {repo.pg.version}</span>
+                    ) : (
+                        <span className={"ml-2"}>Postgres not imported</span>
+                    )}
+                </div>
 
-            <div className={"mt-1 text-[0.85rem] font-bold"}>
-                <Activity size={15} className={"inline-block relative top-[-1.5px]"}/>
-                {repo.pg ? (
-                    <>
-                        {repo.pg.status === "STARTED" && (
-                            <span className={"ml-2"}>Postgres data import in progress</span>
-                        )}
+                <div className={"mt-1 text-[0.85rem]"}>
+                    <Box size={15} className={"inline-block relative top-[-1.5px]"}/>
+                    <span className={"ml-2"}>{formatValue(repo.sizeInMb)}</span>
+                </div>
 
-                        {repo.pg.status === "COMPLETED" && (
-                            <span className={"ml-2"}>Repository is ready</span>
-                        )}
+                <div className={"mt-1 text-[0.85rem] font-bold"}>
+                    <Activity size={15} className={"inline-block relative top-[-1.5px]"}/>
+                    {repo.pg ? (
+                        <>
+                            {repo.pg.status === "STARTED" && (
+                                <span className={"ml-2"}>Postgres data import in progress</span>
+                            )}
 
-                        {repo.pg.status === "FAILED" && (
-                            <span className={"ml-2"}>Postgres data importing failed</span>
-                        )}
-                    </>
-                ) : (
-                    <span className={"ml-2"}>Postgres not imported</span>
-                )}
+                            {repo.pg.status === "COMPLETED" && (
+                                <span className={"ml-2"}>Repository is ready</span>
+                            )}
+
+                            {repo.pg.status === "FAILED" && (
+                                <span className={"ml-2"}>Postgres data importing failed</span>
+                            )}
+                        </>
+                    ) : (
+                        <span className={"ml-2"}>Postgres not imported</span>
+                    )}
+                </div>
             </div>
-        </div>
+        </Link>
     );
 };
 

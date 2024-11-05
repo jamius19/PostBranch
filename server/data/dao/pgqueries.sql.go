@@ -11,22 +11,24 @@ import (
 )
 
 const createPg = `-- name: CreatePg :one
-INSERT INTO pg (pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
+INSERT INTO pg (pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status,
+                repo_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
 `
 
 type CreatePgParams struct {
-	PgPath           string
-	Version          int64
-	StopPg           bool
-	PgUser           string
-	CustomConnection bool
-	Host             sql.NullString
-	Port             sql.NullInt64
-	Username         sql.NullString
-	Password         sql.NullString
-	Status           string
+	PgPath         string
+	Version        int64
+	StopPg         bool
+	PgUser         string
+	ConnectionType string
+	Host           sql.NullString
+	Port           sql.NullInt64
+	Username       sql.NullString
+	Password       sql.NullString
+	Status         string
+	RepoID         int64
 }
 
 func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) {
@@ -35,12 +37,13 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 		arg.Version,
 		arg.StopPg,
 		arg.PgUser,
-		arg.CustomConnection,
+		arg.ConnectionType,
 		arg.Host,
 		arg.Port,
 		arg.Username,
 		arg.Password,
 		arg.Status,
+		arg.RepoID,
 	)
 	var i Pg
 	err := row.Scan(
@@ -49,13 +52,14 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 		&i.Version,
 		&i.StopPg,
 		&i.PgUser,
-		&i.CustomConnection,
+		&i.ConnectionType,
 		&i.Host,
 		&i.Port,
 		&i.Username,
 		&i.Password,
 		&i.Status,
 		&i.Output,
+		&i.RepoID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -63,7 +67,7 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 }
 
 const getPg = `-- name: GetPg :one
-SELECT id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
+SELECT id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
 FROM pg
 WHERE id = ?
 `
@@ -77,13 +81,14 @@ func (q *Queries) GetPg(ctx context.Context, id int64) (Pg, error) {
 		&i.Version,
 		&i.StopPg,
 		&i.PgUser,
-		&i.CustomConnection,
+		&i.ConnectionType,
 		&i.Host,
 		&i.Port,
 		&i.Username,
 		&i.Password,
 		&i.Status,
 		&i.Output,
+		&i.RepoID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -92,20 +97,49 @@ func (q *Queries) GetPg(ctx context.Context, id int64) (Pg, error) {
 
 const updatePg = `-- name: UpdatePg :one
 UPDATE pg
-SET status = ?,
-    output = ?
+SET pg_path         = ?,
+    version         = ?,
+    stop_pg         = ?,
+    pg_user         = ?,
+    connection_type = ?,
+    host            = ?,
+    port            = ?,
+    username        = ?,
+    password        = ?,
+    status          = ?,
+    updated_at      = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, pg_path, version, stop_pg, pg_user, custom_connection, host, port, username, password, status, output, created_at, updated_at
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
 `
 
 type UpdatePgParams struct {
-	Status string
-	Output sql.NullString
-	ID     int64
+	PgPath         string
+	Version        int64
+	StopPg         bool
+	PgUser         string
+	ConnectionType string
+	Host           sql.NullString
+	Port           sql.NullInt64
+	Username       sql.NullString
+	Password       sql.NullString
+	Status         string
+	ID             int64
 }
 
 func (q *Queries) UpdatePg(ctx context.Context, arg UpdatePgParams) (Pg, error) {
-	row := q.db.QueryRowContext(ctx, updatePg, arg.Status, arg.Output, arg.ID)
+	row := q.db.QueryRowContext(ctx, updatePg,
+		arg.PgPath,
+		arg.Version,
+		arg.StopPg,
+		arg.PgUser,
+		arg.ConnectionType,
+		arg.Host,
+		arg.Port,
+		arg.Username,
+		arg.Password,
+		arg.Status,
+		arg.ID,
+	)
 	var i Pg
 	err := row.Scan(
 		&i.ID,
@@ -113,13 +147,52 @@ func (q *Queries) UpdatePg(ctx context.Context, arg UpdatePgParams) (Pg, error) 
 		&i.Version,
 		&i.StopPg,
 		&i.PgUser,
-		&i.CustomConnection,
+		&i.ConnectionType,
 		&i.Host,
 		&i.Port,
 		&i.Username,
 		&i.Password,
 		&i.Status,
 		&i.Output,
+		&i.RepoID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updatePgStatus = `-- name: UpdatePgStatus :one
+UPDATE pg
+SET status     = ?,
+    output     = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+`
+
+type UpdatePgStatusParams struct {
+	Status string
+	Output sql.NullString
+	ID     int64
+}
+
+func (q *Queries) UpdatePgStatus(ctx context.Context, arg UpdatePgStatusParams) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, updatePgStatus, arg.Status, arg.Output, arg.ID)
+	var i Pg
+	err := row.Scan(
+		&i.ID,
+		&i.PgPath,
+		&i.Version,
+		&i.StopPg,
+		&i.PgUser,
+		&i.ConnectionType,
+		&i.Host,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+		&i.Status,
+		&i.Output,
+		&i.RepoID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

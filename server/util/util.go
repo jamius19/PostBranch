@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
 	"strings"
 )
+
+var log = logger.Logger
 
 func WriteResponse(w http.ResponseWriter, r *http.Request, data any, code int) {
 	jsonData, err := json.Marshal(data)
@@ -62,6 +65,16 @@ func SafeStringVal(str *string) string {
 	return output
 }
 
+func TrimmedString(str *string) string {
+	var output = ""
+
+	if str != nil {
+		output = *str
+	}
+
+	return strings.TrimSpace(output)
+}
+
 func GetNullableInt64(nullValue *sql.NullInt64) *int64 {
 	if nullValue.Valid {
 		return &nullValue.Int64
@@ -83,4 +96,16 @@ func StringVal[T ~int | ~int8 | ~int16 | ~int32 |
 	~uint64 | ~float32 | ~float64](num T) string {
 
 	return fmt.Sprint(num)
+}
+
+func PrintReadyBanner() {
+	log.Infof("")
+	log.Infof("")
+	log.Infof("*******************************************************")
+	log.Infof("*                                                     *")
+	log.Infof("*             PostBranch is ready to use!             *")
+	log.Infof("*                                                     *")
+	log.Infof("*******************************************************")
+	log.Infof("")
+	log.Infof("")
 }

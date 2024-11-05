@@ -20,30 +20,37 @@ type Branch struct {
 }
 
 type Pg struct {
-	ID               int64
-	PgPath           string
-	Version          int64
-	StopPg           bool
-	PgUser           string
-	CustomConnection bool
-	Host             sql.NullString
-	Port             sql.NullInt64
-	Username         sql.NullString
-	Password         sql.NullString
-	Status           string
-	Output           sql.NullString
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID             int64
+	PgPath         string
+	Version        int64
+	StopPg         bool
+	PgUser         string
+	ConnectionType string
+	Host           sql.NullString
+	Port           sql.NullInt64
+	Username       sql.NullString
+	Password       sql.NullString
+	Status         string
+	Output         sql.NullString
+	RepoID         int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Repo struct {
 	ID        int64
 	Name      string
-	RepoType  string
 	PoolID    int64
-	PgID      sql.NullInt64
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type Setting struct {
+	ID        int64
+	Key       string
+	Value     string
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
 }
 
 type ZfsDataset struct {
@@ -60,6 +67,7 @@ type ZfsPool struct {
 	SizeInMb  int64
 	Name      string
 	MountPath string
+	PoolType  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

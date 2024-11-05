@@ -22,15 +22,19 @@ export const useNotifiableMutation = <TData, TError, TVariables>(
 
     return useMutation({
         ...options,
-        mutationFn: (variables) => {
+        mutationFn: async (variables) => {
+            await queryClient.invalidateQueries({
+                queryKey: options.invalidates || [],
+            });
+
+            await queryClient.refetchQueries({
+                queryKey: options.invalidates || [],
+            });
+
             return toast.promise(
                 new Promise((resolve, reject) => {
                     options.mutationFn!(variables)
-                        .then(async (result) => {
-                            await queryClient.invalidateQueries({
-                                queryKey: options.invalidates || [],
-                            });
-
+                        .then((result) => {
                             setTimeout(() => resolve(result), getRandomInt(800, 1300));
                         })
                         .catch((error) => {

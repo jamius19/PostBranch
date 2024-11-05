@@ -9,6 +9,7 @@ import (
 
 const dbPath = "/var/lib/postbranch/postbranch.db"
 
+var log = logger.Logger
 var Db *sql.DB
 var Fetcher *dao.Queries
 
@@ -22,6 +23,12 @@ func Initialize() *sql.DB {
 
 	Fetcher = dao.New(Db)
 
-	logger.Logger.Info("Initialized database")
+	_, err = Db.Exec("PRAGMA foreign_keys=ON")
+	if err != nil {
+		log.Errorf("Can't set PRAGMA foreign_keys: %s", err)
+		return nil
+	}
+
+	log.Info("Initialized database")
 	return Db
 }

@@ -5,6 +5,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
+	"github.com/jamius19/postbranch/data/dao/conversion"
+	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/service/repo/pg"
 	"github.com/jamius19/postbranch/util"
@@ -14,7 +16,7 @@ import (
 	"strconv"
 )
 
-func Import(w http.ResponseWriter, r *http.Request) {
+func ImportPg(w http.ResponseWriter, r *http.Request) {
 	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
 	if err != nil {
 		util.WriteError(
@@ -27,23 +29,25 @@ func Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var repoPgInit repo.PgInitDto
-	if err := json.NewDecoder(r.Body).Decode(&repoPgInit); err != nil {
+	var pgInit repo.PgInitDto
+	if err := json.NewDecoder(r.Body).Decode(&pgInit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)
 		return
 	}
 
-	if err := validation.Validate(repoPgInit); err != nil {
+	if err := validation.Validate(pgInit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)
 		return
 	}
 
-	if repoPgInit.IsHostConnection() && repoPgInit.Host != "localhost" {
+	if pgInit.IsHostConnection() && pgInit.Host != "localhost" {
 		util.WriteError(w, r, responseerror.Clarify("Only localhost is supported for now"), http.StatusBadRequest)
 		return
 	}
 
-	repoData, err := data.Fetcher.GetRepo(r.Context(), repoId)
+	log.Infof("Importing Postgres, pgInit: %v", pgInit)
+
+	repoDataQuery, err := data.Fetcher.GetRepo(r.Context(), repoId)
 	if err != nil {
 		log.Error("Failed to load repo %v", repoId)
 
@@ -56,11 +60,15 @@ func Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	repoData, pool, pgInfo := conversion.SplitRepoRow(&repoDataQuery)
+
 	// Check if postgres is already imported for this repo
-	if repoData.Repo.PgID.Valid {
-		pgInfo, err := data.Fetcher.GetPg(r.Context(), repoData.Repo.PgID.Int64)
+	if pgInfo != nil {
+		log.Infof("Existing postgres for repo: %v, pg: %v", repoData, pgInfo)
+
+		pgInfo, err := data.Fetcher.GetPg(r.Context(), pgInfo.ID)
 		if err != nil {
-			log.Error("Failed to load pg info for repo %v", repoData.Repo)
+			log.Error("Failed to load pg info for repo %v", repoData)
 			util.WriteError(
 				w,
 				r,
@@ -71,7 +79,7 @@ func Import(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if pgInfo.Status == dao.PgCompleted {
-			log.Errorf("Postgres is already imported for repository %v", repoData.Repo)
+			log.Errorf("Postgres is already imported for repository %v", repoData)
 
 			util.WriteError(
 				w,
@@ -81,7 +89,7 @@ func Import(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		} else if pgInfo.Status == dao.PgStarted {
-			log.Error("Postgres import in progress for repo %v", repoData.Repo)
+			log.Error("Postgres import in progress for repo %v", repoData)
 
 			util.WriteError(
 				w,
@@ -93,11 +101,16 @@ func Import(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	updatedRepo, err := pg.Import(r.Context(), &repoPgInit, &repoData.Repo)
+	err = pg.Import(r.Context(), &pgInit, repoData, pgInfo, pool)
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	util.WriteResponse(w, r, updatedRepo, http.StatusOK)
+	response := dto.Response[repo.PgInitDto]{
+		Data:  &pgInit,
+		Error: nil,
+	}
+
+	util.WriteResponse(w, r, response, http.StatusOK)
 }

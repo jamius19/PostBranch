@@ -6,11 +6,15 @@ import (
 )
 
 func routes(r *chi.Mux) {
-	r.Route("/api/repos", func(r chi.Router) {
-		r.Get("/", route.ListRepos)
-		r.Post("/", route.InitializeRepo)
-		r.Post("/{repoId}/postgres", route.Import)
+	r.Route("/api", func(r chi.Router) {
+		r.Route("/repos", func(r chi.Router) {
+			r.Get("/", route.ListRepos)
+			r.Get("/{repoId}", route.GetRepo)
 
-		//r.Get("/block-storages", route.ListBlockStorage)
+			r.Post("/", route.InitializeRepo)
+			r.Post("/{repoId}/postgres", route.ImportPg)
+
+			r.Delete("/{repoId}", route.DeleteRepo)
+		})
 	})
 }

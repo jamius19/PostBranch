@@ -2,6 +2,7 @@ import {ChangeEvent, FocusEvent, KeyboardEvent, useCallback, useState} from 'rea
 import {Slider} from "@/components/ui/slider";
 import {Input} from "@/components/ui/input";
 import {useController, UseControllerProps} from "react-hook-form";
+import {formatValue} from "@/util/lib.ts";
 
 const MIN_VALUE = 256; // 256 MB
 
@@ -145,40 +146,4 @@ const StorageSlider = (props: UseControllerProps<StorageFormValues>) => {
     )
 }
 
-const formatValue = (megabytes: number, shortUnitForm = false) => {
-    let val: number;
-    let unitSuffix: string;
-
-    if (megabytes < 1024) {
-        val = megabytes;
-
-        if (shortUnitForm) {
-            unitSuffix = "MB";
-        } else {
-            unitSuffix = val === 1 ? 'Megabyte' : 'Megabytes';
-        }
-
-        return `${megabytes} ${unitSuffix}`;
-    } else if (megabytes < 1024 * 1024) {
-        val = parseFloat((megabytes / 1024).toFixed(2));
-
-        if (shortUnitForm) {
-            unitSuffix = "GB";
-        } else {
-            unitSuffix = val === 1 ? 'Gigabyte' : 'Gigabytes';
-        }
-
-        return `${(megabytes / 1024).toFixed(2)} ${unitSuffix}`;
-    } else {
-        val = parseFloat((megabytes / (1024 * 1024)).toFixed(2));
-
-        if (shortUnitForm) {
-            unitSuffix = "TB";
-        } else {
-            unitSuffix = val === 1 ? 'Terabyte' : 'Terabytes';
-        }
-
-        return `${(megabytes / (1024 * 1024)).toFixed(2)} ${unitSuffix}`;
-    }
-};
 export default StorageSlider;

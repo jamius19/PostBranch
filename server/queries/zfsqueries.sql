@@ -27,6 +27,11 @@ SELECT *
 FROM zfs_pool;
 
 -- name: CreatePool :one
-INSERT INTO zfs_pool (name, path, size_in_mb, mount_path)
-VALUES (?, ?, ?, ?)
+INSERT INTO zfs_pool (name, path, size_in_mb, mount_path, pool_type)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
+
+-- name: DeletePool :exec
+DELETE
+FROM zfs_pool
+WHERE id = ?;

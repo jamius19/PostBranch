@@ -21,58 +21,52 @@ import (
 
 var log = logger.Logger
 
-func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo) (*dao.Repo, error) {
+func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg, pool *dao.ZfsPool) error {
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
 	if _, err := os.Stat(pgBaseBackupPath); errors.Is(err, fs.ErrNotExist) {
-		return nil, responseerror.Clarify("Invalid Postgres path, please check the path")
+		return responseerror.Clarify("Invalid Postgres path, please check the path")
 	}
 
 	err := checkOsUser(pgInit.PostgresOsUser)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = getPgVersion(pgInit)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = checkPgSuperuser(pgInit)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = checkPgReplication(pgInit)
-	if err != nil {
-		return nil, err
-	}
-
-	pool, err := data.Fetcher.GetPool(ctx, repo.PoolID)
-	if err != nil {
-		log.Errorf("Pool not found for repo: %v", repo)
-		return nil, responseerror.Clarify("Associated Data Pool not found")
-	}
+	//err = checkPgReplication(pgInit)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	// Get the main dataset for importing Postgres data
 	dataset, err := data.Fetcher.GetDatasetByName(ctx, pool.Name+"/main")
 	if err != nil {
 		log.Errorf("Dataset not found for repo: %v and pool: %v", repo, pool)
-		return nil, responseerror.Clarify("Associated Dataset not found")
+		return responseerror.Clarify("Associated Dataset not found")
 	}
 
-	createdPg, err := createPgEntry(ctx, pgInit, err)
+	createdPg, err := createPgEntry(ctx, pgInit, repo, pgInfo)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	updatedRepo, err := linkRepoWithPg(ctx, repo, createdPg, err)
-	if err != nil {
-		return nil, err
-	}
+	//_, err = linkRepoWithPg(ctx, repo, createdPg)
+	//if err != nil {
+	//	return err
+	//}
 
-	go copyPostgresData(pgInit, repo, &pool, &dataset, &createdPg)
+	go copyPostgresData(pgInit, repo, pool, &dataset, &createdPg)
 
-	return updatedRepo, nil
+	return nil
 }
 
 func checkOsUser(username string) error {
@@ -188,26 +182,47 @@ func checkPgReplication(pgInit *repo.PgInitDto) error {
 	return nil
 }
 
-func getPgCreateParams(pgInit *repo.PgInitDto) dao.CreatePgParams {
-	return dao.CreatePgParams{
-		PgPath:           pgInit.PostgresPath,
-		Version:          int64(pgInit.Version),
-		StopPg:           pgInit.StopPostgres,
-		PgUser:           pgInit.PostgresOsUser,
-		CustomConnection: pgInit.IsHostConnection(),
-		Host:             sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
-		Port:             sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
-		Username:         sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
-		Password:         sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
-		Status:           dao.PgStarted,
+func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg) (dao.Pg, error) {
+	var createdPg dao.Pg
+	var err error
+
+	if pgInfo != nil {
+		log.Infof("Updating existing Postgres entry %v", pgInfo)
+		pgUpdateParams := dao.UpdatePgParams{
+			PgPath:         pgInit.PostgresPath,
+			Version:        int64(pgInit.Version),
+			StopPg:         pgInit.StopPostgres,
+			PgUser:         "postgres",
+			ConnectionType: "local",
+			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
+			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
+			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
+			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
+			Status:         dao.PgStarted,
+			ID:             pgInfo.ID,
+		}
+
+		createdPg, err = data.Fetcher.UpdatePg(ctx, pgUpdateParams)
+	} else {
+		log.Infof("Creating new Postgres entry")
+
+		pgParams := dao.CreatePgParams{
+			PgPath:         pgInit.PostgresPath,
+			Version:        int64(pgInit.Version),
+			StopPg:         pgInit.StopPostgres,
+			PgUser:         pgInit.PostgresOsUser,
+			ConnectionType: pgInit.ConnectionType,
+			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
+			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
+			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
+			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
+			Status:         dao.PgStarted,
+			RepoID:         repo.ID,
+		}
+
+		createdPg, err = data.Fetcher.CreatePg(ctx, pgParams)
 	}
-}
 
-func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, err error) (dao.Pg, error) {
-	pgParams := getPgCreateParams(pgInit)
-	log.Infof("Creating postgres entry: %v", pgParams)
-
-	createdPg, err := data.Fetcher.CreatePg(ctx, pgParams)
 	if err != nil {
 		log.Errorf("Cannot add Postgres data: %v", err)
 		return dao.Pg{}, responseerror.Clarify("Cannot save Postgres info, please check logs")
@@ -217,22 +232,27 @@ func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, err error) (dao.
 	return createdPg, nil
 }
 
-func linkRepoWithPg(ctx context.Context, repo *dao.Repo, createdPg dao.Pg, err error) (*dao.Repo, error) {
-	updateRepoPgParams := dao.UpdateRepoPgParams{
-		ID:   repo.ID,
-		PgID: sql.NullInt64{Int64: createdPg.ID, Valid: true},
-	}
-
-	log.Infof("Linking repo with pg: %v", updateRepoPgParams)
-	updatedRepo, err := data.Fetcher.UpdateRepoPg(ctx, updateRepoPgParams)
-	if err != nil {
-		log.Errorf("Cannot update repo pgParams: %v", err)
-		return nil, responseerror.Clarify("Cannot save Postgres info, please check logs")
-	}
-
-	log.Infof("Linked repo with pg: %v", updatedRepo)
-	return &updatedRepo, nil
-}
+//func linkRepoWithPg(ctx context.Context, repo *dao.Repo, pg dao.Pg) error {
+//	if pg.re.Valid {
+//		log.Infof("Pg is already linked to repo: %v", repo)
+//		return nil
+//	}
+//
+//	updateRepoPgParams := dao.UpdatePgRepoParams{
+//		ID:     pg.ID,
+//		RepoID: repo.ID,
+//	}
+//
+//	log.Infof("Linking repo with pg: %v", updateRepoPgParams)
+//	updatedPg, err := data.Fetcher.UpdatePgRepo(ctx, updateRepoPgParams)
+//	if err != nil {
+//		log.Errorf("Cannot update repo pgParams: %v", err)
+//		return responseerror.Clarify("Cannot save Postgres info, please check logs")
+//	}
+//
+//	log.Infof("Linked repo with pg: %v", updatedPg)
+//	return nil
+//}
 
 func copyPostgresData(
 	pgInit *repo.PgInitDto,
@@ -291,7 +311,7 @@ func copyPostgresData(
 		)
 	}
 
-	cmds.Set("pgInstance-basebackup", backupCmd)
+	cmds.Set("pg-basebackup", backupCmd)
 
 	err := pg.CreatePgPassFile(pgInit)
 	if err != nil {
@@ -305,13 +325,13 @@ func copyPostgresData(
 		errStr := cmd.GetError(output)
 		log.Errorf("Failed to copy pgInstance. output: %s data: %v", errStr, err)
 
-		updatePgParams := dao.UpdatePgParams{
+		updatePgParams := dao.UpdatePgStatusParams{
 			Status: dao.PgFailed,
 			Output: sql.NullString{String: errStr, Valid: true},
 			ID:     pgInstance.ID,
 		}
 
-		updatedPg, err := data.Fetcher.UpdatePg(ctx, updatePgParams)
+		updatedPg, err := data.Fetcher.UpdatePgStatus(ctx, updatePgParams)
 		if err != nil {
 			log.Errorf("Failed to update import status of pgInstance: %v", err)
 		}
@@ -321,13 +341,13 @@ func copyPostgresData(
 		return
 	}
 
-	updatePgParams := dao.UpdatePgParams{
+	updatePgParams := dao.UpdatePgStatusParams{
 		Status: dao.PgCompleted,
 		Output: sql.NullString{String: cmd.GetError(output), Valid: true},
 		ID:     pgInstance.ID,
 	}
 
-	updatedPg, err := data.Fetcher.UpdatePg(ctx, updatePgParams)
+	updatedPg, err := data.Fetcher.UpdatePgStatus(ctx, updatePgParams)
 	if err != nil {
 		log.Errorf("Failed to update import status of pgInstance: %v", err)
 	}

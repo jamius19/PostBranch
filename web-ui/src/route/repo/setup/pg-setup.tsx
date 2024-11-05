@@ -21,6 +21,7 @@ import React, {useCallback} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import Spinner from "@/components/Spinner.tsx";
 import {ArrowRight, Check} from "lucide-react";
+import {isInteger} from "@/util/lib.ts";
 
 const baseFormSchema = z.object({
     version: z.number()
@@ -96,7 +97,7 @@ const PgSetup = () => {
             pending: "Starting PostgreSQL import",
             success: "PostgreSQL import started successfully",
         },
-        invalidates: ["repo-list"],
+        invalidates: ["repo-list", "repo"],
     });
 
     const pgForm = useAppForm({
@@ -111,8 +112,8 @@ const PgSetup = () => {
 
     const hostConnectionSelected = pgForm.watch("connectionType") === "host";
 
-    if (!repoId) {
-        return <Navigate to={"/error"}/>;
+    if (!isInteger(repoIdStr)) {
+        return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
     }
 
     const repoInitSuccess = pgImport.isSuccess;
@@ -356,7 +357,11 @@ const PgSetup = () => {
                                                    placeholder="postgres"/>
                                         </FormControl>
                                         <FormDescription>
-                                            PostgreSQL user name
+                                            PostgreSQL user name&nbsp;
+                                            <i>
+                                                (This MUST be a <code
+                                                className={"font-bold"}>superuser</code>)
+                                            </i>
                                         </FormDescription>
                                         <FormMessage/>
                                     </FormItem>

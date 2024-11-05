@@ -1,7 +1,9 @@
+export type PgStatus = "COMPLETED" | "STARTED" | "FAILED";
+
 interface PgInfo {
     id: number;
     version: number;
-    status: string;
+    status: PgStatus;
     output: string;
 }
 
@@ -9,6 +11,7 @@ interface Branch {
     id: number;
     name: string;
     parentId: number;
+    createdAt: Date;
 }
 
 export interface RepoResponseDto {
@@ -16,8 +19,7 @@ export interface RepoResponseDto {
     name: string;
     path: string;
     repoType: string;
-    size: number;
-    sizeUnit: string;
+    sizeInMb: number;
     pg?: PgInfo;
     branches: Branch[];
     createdAt: Date;

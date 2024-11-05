@@ -33,7 +33,7 @@ func Query(auth AuthInfo, cmdKey string, senstive bool, pgPath string, query str
 		defer RemovePgPassFile()
 
 		return cmd.Single(
-			cmdKey+"-host",
+			cmdKey,
 			false,
 			senstive,
 			psqlPath,
@@ -47,7 +47,7 @@ func Query(auth AuthInfo, cmdKey string, senstive bool, pgPath string, query str
 	}
 
 	return cmd.Single(
-		cmdKey+"-local",
+		cmdKey,
 		false,
 		senstive,
 		"sudo",
@@ -70,6 +70,12 @@ func CreatePgPassFile(auth AuthInfo) error {
 		auth.GetPort(),
 		auth.GetDbUsername(),
 		auth.GetPassword(),
+	)
+
+	// TODO: Remove this
+	cmds.Set(
+		"who-am-i",
+		cmd.Get("whoami"),
 	)
 
 	cmds.Set(

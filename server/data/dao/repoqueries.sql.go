@@ -8,6 +8,7 @@ package dao
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const countRepo = `-- name: CountRepo :one
@@ -76,26 +77,23 @@ func (q *Queries) CreateBranch(ctx context.Context, arg CreateBranchParams) (Bra
 }
 
 const createRepo = `-- name: CreateRepo :one
-INSERT INTO repo (name, repo_type, pool_id)
-VALUES (?, ?, ?)
-RETURNING id, name, repo_type, pool_id, pg_id, created_at, updated_at
+INSERT INTO repo (name, pool_id)
+VALUES (?, ?)
+RETURNING id, name, pool_id, created_at, updated_at
 `
 
 type CreateRepoParams struct {
-	Name     string
-	RepoType string
-	PoolID   int64
+	Name   string
+	PoolID int64
 }
 
 func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, error) {
-	row := q.db.QueryRowContext(ctx, createRepo, arg.Name, arg.RepoType, arg.PoolID)
+	row := q.db.QueryRowContext(ctx, createRepo, arg.Name, arg.PoolID)
 	var i Repo
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.RepoType,
 		&i.PoolID,
-		&i.PgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -103,35 +101,97 @@ func (q *Queries) CreateRepo(ctx context.Context, arg CreateRepoParams) (Repo, e
 }
 
 const getRepo = `-- name: GetRepo :one
-SELECT rp.id, rp.name, rp.repo_type, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.size_in_mb, zp.name, zp.mount_path, zp.created_at, zp.updated_at
+SELECT rp.id              AS repo_id,
+       rp.name            AS repo_name,
+       rp.created_at      AS repo_created_at,
+       rp.updated_at      AS repo_updated_at,
+       zp.id              AS pool_id,
+       zp.path            AS pool_path,
+       zp.size_in_mb      AS pool_size_in_mb,
+       zp.name            AS pool_name,
+       zp.mount_path      AS pool_mount_path,
+       zp.pool_type       AS pool_type,
+       zp.created_at      AS pool_created_at,
+       zp.updated_at      AS pool_updated_at,
+       pg.id              AS pg_id,
+       pg.pg_path         AS pg_path,
+       pg.version         AS pg_version,
+       pg.stop_pg         AS pg_stop_pg,
+       pg.pg_user         AS pg_pg_user,
+       pg.connection_type AS pg_connection_type,
+       pg.host            AS pg_host,
+       pg.port            AS pg_port,
+       pg.username        AS pg_username,
+       pg.password        AS pg_password,
+       pg.status          AS pg_status,
+       pg.output          AS pg_output,
+       pg.created_at      AS pg_created_at,
+       pg.updated_at      AS pg_updated_at
 FROM repo rp
          JOIN zfs_pool zp on rp.pool_id = zp.id
+         LEFT JOIN main.pg pg on rp.id = pg.repo_id
 WHERE rp.id = ?
 `
 
 type GetRepoRow struct {
-	Repo    Repo
-	ZfsPool ZfsPool
+	RepoID           int64
+	RepoName         string
+	RepoCreatedAt    time.Time
+	RepoUpdatedAt    time.Time
+	PoolID           int64
+	PoolPath         string
+	PoolSizeInMb     int64
+	PoolName         string
+	PoolMountPath    string
+	PoolType         string
+	PoolCreatedAt    time.Time
+	PoolUpdatedAt    time.Time
+	PgID             sql.NullInt64
+	PgPath           sql.NullString
+	PgVersion        sql.NullInt64
+	PgStopPg         sql.NullBool
+	PgPgUser         sql.NullString
+	PgConnectionType sql.NullString
+	PgHost           sql.NullString
+	PgPort           sql.NullInt64
+	PgUsername       sql.NullString
+	PgPassword       sql.NullString
+	PgStatus         sql.NullString
+	PgOutput         sql.NullString
+	PgCreatedAt      sql.NullTime
+	PgUpdatedAt      sql.NullTime
 }
 
 func (q *Queries) GetRepo(ctx context.Context, id int64) (GetRepoRow, error) {
 	row := q.db.QueryRowContext(ctx, getRepo, id)
 	var i GetRepoRow
 	err := row.Scan(
-		&i.Repo.ID,
-		&i.Repo.Name,
-		&i.Repo.RepoType,
-		&i.Repo.PoolID,
-		&i.Repo.PgID,
-		&i.Repo.CreatedAt,
-		&i.Repo.UpdatedAt,
-		&i.ZfsPool.ID,
-		&i.ZfsPool.Path,
-		&i.ZfsPool.SizeInMb,
-		&i.ZfsPool.Name,
-		&i.ZfsPool.MountPath,
-		&i.ZfsPool.CreatedAt,
-		&i.ZfsPool.UpdatedAt,
+		&i.RepoID,
+		&i.RepoName,
+		&i.RepoCreatedAt,
+		&i.RepoUpdatedAt,
+		&i.PoolID,
+		&i.PoolPath,
+		&i.PoolSizeInMb,
+		&i.PoolName,
+		&i.PoolMountPath,
+		&i.PoolType,
+		&i.PoolCreatedAt,
+		&i.PoolUpdatedAt,
+		&i.PgID,
+		&i.PgPath,
+		&i.PgVersion,
+		&i.PgStopPg,
+		&i.PgPgUser,
+		&i.PgConnectionType,
+		&i.PgHost,
+		&i.PgPort,
+		&i.PgUsername,
+		&i.PgPassword,
+		&i.PgStatus,
+		&i.PgOutput,
+		&i.PgCreatedAt,
+		&i.PgUpdatedAt,
 	)
 	return i, err
 }
@@ -174,15 +234,65 @@ func (q *Queries) ListBranchesByRepoId(ctx context.Context, repoID int64) ([]Bra
 }
 
 const listRepo = `-- name: ListRepo :many
-SELECT rp.id, rp.name, rp.repo_type, rp.pool_id, rp.pg_id, rp.created_at, rp.updated_at, zp.id, zp.path, zp.size_in_mb, zp.name, zp.mount_path, zp.created_at, zp.updated_at
+SELECT rp.id              AS repo_id,
+       rp.name            AS repo_name,
+       rp.created_at      AS repo_created_at,
+       rp.updated_at      AS repo_updated_at,
+       zp.id              AS pool_id,
+       zp.path            AS pool_path,
+       zp.size_in_mb      AS pool_size_in_mb,
+       zp.name            AS pool_name,
+       zp.mount_path      AS pool_mount_path,
+       zp.pool_type       AS pool_type,
+       zp.created_at      AS pool_created_at,
+       zp.updated_at      AS pool_updated_at,
+       pg.id              AS pg_id,
+       pg.pg_path         AS pg_path,
+       pg.version         AS pg_version,
+       pg.stop_pg         AS pg_stop_pg,
+       pg.pg_user         AS pg_pg_user,
+       pg.connection_type AS pg_connection_type,
+       pg.host            AS pg_host,
+       pg.port            AS pg_port,
+       pg.username        AS pg_username,
+       pg.password        AS pg_password,
+       pg.status          AS pg_status,
+       pg.output          AS pg_output,
+       pg.created_at      AS pg_created_at,
+       pg.updated_at      AS pg_updated_at
 FROM repo rp
          JOIN zfs_pool zp on rp.pool_id = zp.id
+         LEFT JOIN main.pg pg on rp.id = pg.repo_id
 ORDER BY rp.created_at DESC
 `
 
 type ListRepoRow struct {
-	Repo    Repo
-	ZfsPool ZfsPool
+	RepoID           int64
+	RepoName         string
+	RepoCreatedAt    time.Time
+	RepoUpdatedAt    time.Time
+	PoolID           int64
+	PoolPath         string
+	PoolSizeInMb     int64
+	PoolName         string
+	PoolMountPath    string
+	PoolType         string
+	PoolCreatedAt    time.Time
+	PoolUpdatedAt    time.Time
+	PgID             sql.NullInt64
+	PgPath           sql.NullString
+	PgVersion        sql.NullInt64
+	PgStopPg         sql.NullBool
+	PgPgUser         sql.NullString
+	PgConnectionType sql.NullString
+	PgHost           sql.NullString
+	PgPort           sql.NullInt64
+	PgUsername       sql.NullString
+	PgPassword       sql.NullString
+	PgStatus         sql.NullString
+	PgOutput         sql.NullString
+	PgCreatedAt      sql.NullTime
+	PgUpdatedAt      sql.NullTime
 }
 
 func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
@@ -195,20 +305,32 @@ func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
 	for rows.Next() {
 		var i ListRepoRow
 		if err := rows.Scan(
-			&i.Repo.ID,
-			&i.Repo.Name,
-			&i.Repo.RepoType,
-			&i.Repo.PoolID,
-			&i.Repo.PgID,
-			&i.Repo.CreatedAt,
-			&i.Repo.UpdatedAt,
-			&i.ZfsPool.ID,
-			&i.ZfsPool.Path,
-			&i.ZfsPool.SizeInMb,
-			&i.ZfsPool.Name,
-			&i.ZfsPool.MountPath,
-			&i.ZfsPool.CreatedAt,
-			&i.ZfsPool.UpdatedAt,
+			&i.RepoID,
+			&i.RepoName,
+			&i.RepoCreatedAt,
+			&i.RepoUpdatedAt,
+			&i.PoolID,
+			&i.PoolPath,
+			&i.PoolSizeInMb,
+			&i.PoolName,
+			&i.PoolMountPath,
+			&i.PoolType,
+			&i.PoolCreatedAt,
+			&i.PoolUpdatedAt,
+			&i.PgID,
+			&i.PgPath,
+			&i.PgVersion,
+			&i.PgStopPg,
+			&i.PgPgUser,
+			&i.PgConnectionType,
+			&i.PgHost,
+			&i.PgPort,
+			&i.PgUsername,
+			&i.PgPassword,
+			&i.PgStatus,
+			&i.PgOutput,
+			&i.PgCreatedAt,
+			&i.PgUpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -223,28 +345,36 @@ func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
 	return items, nil
 }
 
-const updateRepoPg = `-- name: UpdateRepoPg :one
-UPDATE repo
-SET pg_id      = ?,
+const updatePgRepo = `-- name: UpdatePgRepo :one
+UPDATE pg
+SET repo_id    = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, name, repo_type, pool_id, pg_id, created_at, updated_at
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
 `
 
-type UpdateRepoPgParams struct {
-	PgID sql.NullInt64
-	ID   int64
+type UpdatePgRepoParams struct {
+	RepoID int64
+	ID     int64
 }
 
-func (q *Queries) UpdateRepoPg(ctx context.Context, arg UpdateRepoPgParams) (Repo, error) {
-	row := q.db.QueryRowContext(ctx, updateRepoPg, arg.PgID, arg.ID)
-	var i Repo
+func (q *Queries) UpdatePgRepo(ctx context.Context, arg UpdatePgRepoParams) (Pg, error) {
+	row := q.db.QueryRowContext(ctx, updatePgRepo, arg.RepoID, arg.ID)
+	var i Pg
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
-		&i.RepoType,
-		&i.PoolID,
-		&i.PgID,
+		&i.PgPath,
+		&i.Version,
+		&i.StopPg,
+		&i.PgUser,
+		&i.ConnectionType,
+		&i.Host,
+		&i.Port,
+		&i.Username,
+		&i.Password,
+		&i.Status,
+		&i.Output,
+		&i.RepoID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

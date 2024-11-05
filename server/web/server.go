@@ -7,22 +7,32 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/opts"
+	"github.com/jamius19/postbranch/service/repo/zfs"
+	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/middleware"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 	"time"
 )
 
 var log = logger.Logger
 
-func Initialize() {
-	// Channel to listen for interrupt signal
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGINT)
+func Initialize(rootCtx context.Context, webWg *sync.WaitGroup) {
+	webWg.Add(1)
+	defer webWg.Done()
 
-	rootCtx, rootCancel := context.WithCancel(context.Background())
+	err := zfs.MountAll()
+	if err != nil {
+		log.Fatal("Failed to mount ZFS pool(s). Error: %s", err)
+	}
+
+	select {
+	case <-rootCtx.Done():
+		log.Info("Received interrupt/terminate signal, shutting down...")
+		zfs.UnmountAll()
+		return
+	default:
+	}
 
 	r := chi.NewRouter()
 	middleware.Middlewares(r, rootCtx)
@@ -36,15 +46,18 @@ func Initialize() {
 	}
 
 	go start(srv)
+	util.PrintReadyBanner()
 
 	// Wait for interrupt signal
-	<-stop
-	rootCancel()
+	select {
+	case <-rootCtx.Done():
+		log.Info("Received interrupt/terminate signal, shutting down...")
+	}
 
-	log.Info("Received interrupt/terminate signal, shutting down...")
+	zfs.UnmountAll()
 
 	// Create shutdown context as child of root context
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 50*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {

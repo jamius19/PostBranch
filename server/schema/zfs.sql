@@ -1,15 +1,16 @@
-CREATE TABLE IF NOT EXISTS zfs_pool
+CREATE TABLE zfs_pool
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     path       VARCHAR(2048) NOT NULL,
     size_in_mb INTEGER       NOT NULL,
     name       VARCHAR(255)  NOT NULL,
     mount_path VARCHAR(2048) NOT NULL,
+    pool_type  VARCHAR(60)  NOT NULL,
     created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS zfs_dataset
+CREATE TABLE zfs_dataset
 (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       VARCHAR(255) NOT NULL,

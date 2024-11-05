@@ -25,7 +25,8 @@ type Pg struct {
 }
 
 type Branch struct {
-	Id       int64  `json:"id"`
-	Name     string `json:"name"`
-	ParentId *int64 `json:"parentId"`
+	Id        int64     `json:"id"`
+	Name      string    `json:"name"`
+	ParentId  *int64    `json:"parentId"`
+	CreatedAt time.Time `json:"createdAt"`
 }

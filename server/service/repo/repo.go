@@ -2,6 +2,8 @@ package repo
 
 import (
 	"context"
+	"github.com/elliotchance/orderedmap/v2"
+	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
 	"github.com/jamius19/postbranch/data/dto/repo"
@@ -29,9 +31,8 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.Response
 		}
 
 		repoCreateDto := dao.CreateRepoParams{
-			Name:     repoinit.Name,
-			PoolID:   pool.ID,
-			RepoType: repoinit.RepoType,
+			Name:   repoinit.Name,
+			PoolID: pool.ID,
 		}
 
 		createdRepo, err := data.Fetcher.CreateRepo(ctx, repoCreateDto)
@@ -45,7 +46,7 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.Response
 			ID:        createdRepo.ID,
 			Name:      createdRepo.Name,
 			Path:      pool.Path,
-			RepoType:  createdRepo.RepoType,
+			RepoType:  pool.PoolType,
 			SizeInMb:  pool.SizeInMb,
 			Pg:        nil,
 			PoolID:    pool.ID,
@@ -57,4 +58,43 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.Response
 	}
 
 	return nil, nil
+}
+
+func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
+	log.Infof("Deleting repo: %v, pool: %v", repo, pool)
+
+	// TODO: Stop postgres
+
+	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
+
+	cmds.Set(
+		"zpool-destroy",
+		cmd.Get("zpool", "destroy", "-f", pool.Name),
+	)
+
+	if pool.PoolType == "virtual" {
+		loopbackPath, err := zfs.FindDevicePath(pool)
+		if err != nil {
+			return err
+		}
+
+		loopbackPath = "/dev/" + loopbackPath
+		cmds.Set("loopback-detach", cmd.Get("losetup", "-d", loopbackPath))
+		cmds.Set("remove-device", cmd.Get("rm", "-rf", loopbackPath))
+	}
+
+	cmds.Set("remove-mount-path", cmd.Get("rm", "-rf", pool.MountPath))
+	_, err := cmd.Multi(cmds)
+
+	if err != nil {
+		log.Errorf("Failed to delete repo: %v, pool: %v, error: %s", repo, pool, err)
+		return err
+	}
+
+	err = data.Fetcher.DeletePool(ctx, pool.ID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

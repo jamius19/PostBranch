@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/opts"
 	"github.com/jamius19/postbranch/service/repo/zfs"
 	"github.com/jamius19/postbranch/web"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 var log = logger.Logger
+var webWg = sync.WaitGroup{}
 
 func main() {
 	if os.Geteuid() != 0 {
@@ -31,8 +36,18 @@ func main() {
 
 	log.Infof("Compatible ZFS version found (%s). Continuing...", *version)
 
+	// Channel to listen for interrupt signal
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGINT)
+
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+
 	db := data.Initialize()
 	defer db.Close()
 
-	web.Initialize()
+	go web.Initialize(rootCtx, &webWg)
+
+	<-stop
+	rootCancel()
+	webWg.Wait()
 }
