@@ -27,10 +27,6 @@ export const useNotifiableMutation = <TData, TError, TVariables>(
                 queryKey: options.invalidates || [],
             });
 
-            await queryClient.refetchQueries({
-                queryKey: options.invalidates || [],
-            });
-
             return toast.promise(
                 new Promise((resolve, reject) => {
                     options.mutationFn!(variables)

@@ -21,13 +21,13 @@ func Initialize() *sql.DB {
 		logger.Logger.Fatal(err)
 	}
 
-	Fetcher = dao.New(Db)
-
 	_, err = Db.Exec("PRAGMA foreign_keys=ON")
 	if err != nil {
 		log.Errorf("Can't set PRAGMA foreign_keys: %s", err)
 		return nil
 	}
+
+	Fetcher = dao.New(Db)
 
 	log.Info("Initialized database")
 	return Db

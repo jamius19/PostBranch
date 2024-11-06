@@ -51,7 +51,7 @@ const Repo = () => {
         return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
     }
 
-    if (repoQuery.isPending || disableInteraction || repoDeleteQuery.isSuccess) {
+    if (repoQuery.isPending || disableInteraction || repoDeleteQuery.isSuccess || repoQuery.isRefetching) {
         return <Spinner/>;
     }
 

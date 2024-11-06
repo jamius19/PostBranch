@@ -10,23 +10,28 @@ import {PackagePlus} from "lucide-react";
 import Link from "@/components/Link.tsx";
 
 const RepoList = () => {
-    const {isPending, data: response, error} = useQuery({
+    const repoListQuery = useQuery({
         queryKey: ["repo-list"],
         queryFn: listRepos,
     });
 
-    console.log(response);
-    console.log(`isPending: ${isPending} error: ${error}`);
+    const repos = repoListQuery.data?.data;
 
-    if (error) {
+    if (repoListQuery.isError) {
         return <Navigate to={"/error"}
                          state={{message: "An error occurred while fetching the repository list."}}/>;
     }
 
-    if (isPending) {
+    if (repoListQuery.isPending || repoListQuery.isRefetching) {
         return (
             <Spinner/>
         );
+    }
+
+    if (!repoListQuery.isSuccess || !repos) {
+        return <Navigate
+            to={"/error"}
+            state={{message: "An error occurred while fetching the repository list."}}/>;
     }
 
     return (
@@ -43,17 +48,17 @@ const RepoList = () => {
                 </Link>
             </div>
 
-            {!!response.data && !!response.data.length && (
+            {!!repos && !!repos.length && (
                 <div className={"mb-12"}>
                     <div className={clsx("grid gap-6", styles.repoGrid)}>
-                        {response?.data.map(repo => (
+                        {repos.map(repo => (
                             <RepoInfoCard key={repo.id} repo={repo}/>
                         ))}
                     </div>
                 </div>
             )}
 
-            {!!response.data && !response.data.length && (
+            {!!repos && !repos.length && (
                 <div className={"mt-40 flex flex-col items-center gap-4"}>
                     <img src={"/images/purrcy_confused.png"} width={"350px"} alt={"Purrcy is confused"}/>
                     <p className={"text-center"}>No repositories found. Create one?</p>
