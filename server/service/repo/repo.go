@@ -40,7 +40,7 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*repo.Response
 		if err != nil {
 			// TODO: Cleanup Pool and Dataset
 			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoinit.Name, repoCreateDto, err)
-			return nil, responseerror.Clarify("Failed to create repository")
+			return nil, responseerror.From("Failed to create repository")
 		}
 
 		repoResponse := repo.Response{

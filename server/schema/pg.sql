@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS pg
+CREATE TABLE pg
 (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     pg_path         VARCHAR(2048) NOT NULL,
@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS pg
     port            INTEGER,
     username        VARCHAR(255),
     password        VARCHAR(255),
+    ssl_mode        VARCHAR(20),
     status          VARCHAR(50)   NOT NULL,
     output          TEXT,
     repo_id         INTEGER       NOT NULL REFERENCES repo (id) ON DELETE CASCADE,

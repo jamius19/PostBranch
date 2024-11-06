@@ -53,7 +53,7 @@ func Single(key string, skipLog bool, sensitive bool, name string, args ...strin
 		}
 
 		outputStr := string(out)
-		return &outputStr, responseerror.Clarify("Error executing command")
+		return &outputStr, responseerror.From("Error executing command")
 	}
 
 	output := string(out)

@@ -19,46 +19,7 @@ type AuthInfo interface {
 	GetPort() int
 	GetDbUsername() string
 	GetPassword() string
-}
-
-func Query(auth AuthInfo, cmdKey string, senstive bool, pgPath string, query string) (*string, error) {
-	psqlPath := pgPath + "/bin/psql"
-
-	if auth.GetConnectionType() == "host" {
-		err := CreatePgPassFile(auth)
-		if err != nil {
-			return nil, err
-		}
-
-		defer RemovePgPassFile()
-
-		return cmd.Single(
-			cmdKey,
-			false,
-			senstive,
-			psqlPath,
-			"-t", "-w", "-P", "format=unaligned",
-			"-d", "postgres",
-			"-U", auth.GetDbUsername(),
-			"-h", auth.GetHost(),
-			"-p", fmt.Sprintf("%d", auth.GetPort()),
-			"-c", query,
-		)
-	}
-
-	return cmd.Single(
-		cmdKey,
-		false,
-		senstive,
-		"sudo",
-		"-u", auth.GetPostgresOsUser(),
-		psqlPath,
-		"-t",
-		"-w",
-		"-P", "format=unaligned",
-		"-w",
-		"-c", query,
-	)
+	GetSslMode() string
 }
 
 func CreatePgPassFile(auth AuthInfo) error {
@@ -102,7 +63,7 @@ func CreatePgPassFile(auth AuthInfo) error {
 	if err != nil {
 		errStr := cmd.GetError(output)
 		log.Errorf("Failed to create pgpass file. output: %s data: %v", errStr, err)
-		return responseerror.Clarify("Failed to do pre-connect housekeeping, please check logs")
+		return responseerror.From("Failed to do pre-connect housekeeping, please check logs")
 	}
 
 	return nil
@@ -112,7 +73,7 @@ func RemovePgPassFile() error {
 	output, err := cmd.Single("remove-pg-pass-file", false, false, "su", "-c", "rm ~/.pgpass")
 	if err != nil {
 		log.Errorf("Failed to remove pgpass file. output: %s data: %v", util.SafeStringVal(output), err)
-		return responseerror.Clarify("Failed to remove temporary pgpass file, please delete it manually")
+		return responseerror.From("Failed to remove temporary pgpass file, please delete it manually")
 	}
 
 	return nil

@@ -4,9 +4,19 @@ FROM pg
 WHERE id = ?;
 
 -- name: CreatePg :one
-INSERT INTO pg (pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status,
+INSERT INTO pg (pg_path,
+                version,
+                stop_pg,
+                pg_user,
+                connection_type,
+                host,
+                port,
+                ssl_mode,
+                username,
+                password,
+                status,
                 repo_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdatePgStatus :one
@@ -26,6 +36,7 @@ SET pg_path         = ?,
     connection_type = ?,
     host            = ?,
     port            = ?,
+    ssl_mode        =?,
     username        = ?,
     password        = ?,
     status          = ?,

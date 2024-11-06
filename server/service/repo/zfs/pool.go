@@ -20,13 +20,13 @@ func VirtualPool(ctx context.Context, repoinit *repo.InitDto) (*dao.ZfsPool, err
 
 	if err := CreateSparseFile(repoinit.Path, repoinit.SizeInMb); err != nil {
 		log.Errorf("Failed to create sparse file. Error: %s", err)
-		return nil, responseerror.Clarify("Failed to create sparse file")
+		return nil, responseerror.From("Failed to create sparse file")
 	}
 
 	loopNo, err := SetupLoopDevice(repoinit.Path)
 	if err != nil {
 		log.Errorf("Failed to setup loopback device. Error: %s", err)
-		return nil, responseerror.Clarify("Failed to setup loopback device")
+		return nil, responseerror.From("Failed to setup loopback device")
 	}
 
 	pool, err := createPool(ctx, repoinit, loopNo)
@@ -71,7 +71,7 @@ func createPool(ctx context.Context, repoinit *repo.InitDto, loopNo int) (*dao.Z
 	if err != nil {
 		// TODO: Cleanup Pool
 		log.Errorf("Failed to insert createPool. Repo:%v Path: %s Error:%s", poolData, devicePath, err)
-		return nil, responseerror.Clarify("Failed to create createPool")
+		return nil, responseerror.From("Failed to create createPool")
 	}
 
 	log.Infof("Pool insertion successful %s", pool.Name)

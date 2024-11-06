@@ -14,8 +14,10 @@ import (
 	"github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
+	_ "github.com/lib/pq"
 	"io/fs"
 	"os"
+	"os/user"
 	"strings"
 )
 
@@ -24,7 +26,7 @@ var log = logger.Logger
 func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg, pool *dao.ZfsPool) error {
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
 	if _, err := os.Stat(pgBaseBackupPath); errors.Is(err, fs.ErrNotExist) {
-		return responseerror.Clarify("Invalid Postgres path, please check the path")
+		return responseerror.From("Invalid Postgres path, please check the path")
 	}
 
 	err := checkOsUser(pgInit.PostgresOsUser)
@@ -32,7 +34,7 @@ func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo 
 		return err
 	}
 
-	err = getPgVersion(pgInit)
+	err = checkPgVersion(pgInit)
 	if err != nil {
 		return err
 	}
@@ -42,27 +44,22 @@ func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo 
 		return err
 	}
 
-	//err = checkPgReplication(pgInit)
-	//if err != nil {
-	//	return nil, err
-	//}
+	err = checkPgReplication(pgInit)
+	if err != nil {
+		return err
+	}
 
 	// Get the main dataset for importing Postgres data
 	dataset, err := data.Fetcher.GetDatasetByName(ctx, pool.Name+"/main")
 	if err != nil {
 		log.Errorf("Dataset not found for repo: %v and pool: %v", repo, pool)
-		return responseerror.Clarify("Associated Dataset not found")
+		return responseerror.From("Associated Dataset not found")
 	}
 
-	createdPg, err := createPgEntry(ctx, pgInit, repo, pgInfo)
+	createdPg, err := insertPgEntry(ctx, pgInit, repo, pgInfo)
 	if err != nil {
 		return err
 	}
-
-	//_, err = linkRepoWithPg(ctx, repo, createdPg)
-	//if err != nil {
-	//	return err
-	//}
 
 	go copyPostgresData(pgInit, repo, pool, &dataset, &createdPg)
 
@@ -70,105 +67,173 @@ func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo 
 }
 
 func checkOsUser(username string) error {
-	_, err := cmd.Single("os-username-check", false, false, "id", "-u", username)
+	_, err := user.Lookup(username)
 	if err != nil {
 		log.Errorf("User %s not found", username)
-		return responseerror.Clarify("Invalid Postgres OS user")
+		return responseerror.From("Invalid Postgres OS user")
 	}
 
 	return nil
 }
 
-func getPgVersion(pgInit *repo.PgInitDto) error {
+func checkPgVersion(pgInit *repo.PgInitDto) error {
 	versionQuery := "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
-	pgPath := pgInit.PostgresPath
+	var version string
 
-	pgVersion, err := pg.Query(pgInit, "pg-version-check", false, pgPath, versionQuery)
+	if pgInit.IsHostConnection() {
+		_, rows, cleanup, err := dao.RunQuery(pgInit, versionQuery)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 
-	if err != nil || pgVersion == nil {
-		errMsg := fmt.Sprintf(
-			"Can't connect to PostgreSQL. Is it running and accessible via %s user on %s connection?",
-			pgInit.GetPgUser(),
-			pgInit.ConnectionType,
+		for rows.Next() {
+			err := rows.Scan(&version)
+			if err != nil {
+				log.Errorf("Failed to scan: %v", err)
+				return responseerror.From("Failed to query Postgres version")
+			}
+		}
+	} else {
+		output, err := cmd.Single(
+			"pg-version-check",
+			false,
+			false,
+			"sudo",
+			"-u", pgInit.GetPostgresOsUser(),
+			pgInit.PostgresPath+"/bin/psql",
+			"-t",
+			"-w",
+			"-P", "format=unaligned",
+			"-w",
+			"-c", versionQuery,
 		)
+		version = util.TrimmedString(output)
 
-		log.Error(errMsg)
-		return responseerror.Clarify(errMsg)
+		if err != nil || version == cmd.EmptyOutput {
+			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
+			return responseerror.From("Can't connect to PostgreSQL. Is it running and the configuration is correct?")
+		}
 	}
 
-	if !strings.Contains(*pgVersion, util.StringVal(pgInit.Version)) {
+	if !strings.Contains(version, util.StringVal(pgInit.Version)) {
 		log.Error("Postgres version mismatch")
-		return responseerror.Clarify("Postgres version mismatch")
+		return responseerror.From("Postgres version mismatch")
 	}
 
 	return nil
 }
 
 func checkPgSuperuser(pgInit *repo.PgInitDto) error {
-	pgPath := pgInit.PostgresPath
-	superuserQuery := fmt.Sprintf(dao.PgSuperUserCheckQuery, pgInit.GetPgUser())
+	superuserQuery := dao.PgSuperUserCheckQuery
 
-	superuserQueryOutput, err := pg.Query(
-		pgInit,
-		fmt.Sprintf("pg-superuser-check-%s", pgInit.ConnectionType),
-		true,
-		pgPath,
-		superuserQuery,
-	)
+	var queryResult string
 
-	if err != nil || superuserQueryOutput == nil {
-		errMsg := fmt.Sprintf(
-			"Can't connect to PostgreSQL. Is it running and accessible via %s user?",
-			pgInit.GetPgUser(),
+	if pgInit.IsHostConnection() {
+		_, rows, cleanup, err := dao.RunQuery(pgInit, superuserQuery)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		for rows.Next() {
+			err := rows.Scan(&queryResult)
+			if err != nil {
+				log.Errorf("Failed to scan: %v", err)
+				return responseerror.From("Failed to query Postgres Superuser permission")
+			}
+		}
+	} else {
+		output, err := cmd.Single(
+			"pg-superuser-check",
+			false,
+			true,
+			"sudo",
+			"-u", pgInit.GetPostgresOsUser(),
+			pgInit.PostgresPath+"/bin/psql",
+			"-t",
+			"-w",
+			"-P", "format=unaligned",
+			"-w",
+			"-c", superuserQuery,
 		)
 
-		log.Error(errMsg)
-		return responseerror.Clarify(errMsg)
+		queryResult = util.TrimmedString(output)
+
+		if err != nil {
+			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
+			return responseerror.From("Failed to query Postgres Superuser permission")
+		}
 	}
 
-	if !strings.Contains(*superuserQueryOutput, "Superuser") {
+	if queryResult == cmd.EmptyOutput {
+		errMsg := "Can't connect to PostgreSQL. Is it running and the configuration is correct?"
+
+		log.Error(errMsg)
+		return responseerror.From(errMsg)
+	}
+
+	if !strings.Contains(queryResult, "t") {
 		errMsg := fmt.Sprintf(
 			"%s is not a superuser. Please connect using a superuser credentials.",
 			pgInit.GetPgUser(),
 		)
 
 		log.Error(errMsg)
-		return responseerror.Clarify(errMsg)
+		return responseerror.From(errMsg)
 	}
 
 	return nil
 }
 
 func checkPgReplication(pgInit *repo.PgInitDto) error {
-	pgPath := pgInit.PostgresPath
-	var replicationQuery string
+	var queryResult string
 
-	if pgInit.ConnectionType == "host" {
-		replicationQuery = fmt.Sprintf(dao.PgHostReplicationCheckQuery, pgInit.GetDbUsername())
+	if pgInit.IsHostConnection() {
+		_, rows, cleanup, err := dao.RunQuery(pgInit, fmt.Sprintf(dao.PgHostReplicationCheckQuery, pgInit.GetDbUsername()))
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+
+		for rows.Next() {
+			err := rows.Scan(&queryResult)
+			if err != nil {
+				log.Errorf("Failed to scan: %v", err)
+				return responseerror.From("Failed to query Postgres replication permission")
+			}
+		}
 	} else {
-		replicationQuery = fmt.Sprintf(dao.PgLocalReplicationCheckQuery, pgInit.GetPostgresOsUser())
-	}
-
-	replicationQueryOutput, err := pg.Query(
-		pgInit,
-		fmt.Sprintf("pg-replication-check-%s", pgInit.ConnectionType),
-		true,
-		pgPath,
-		replicationQuery,
-	)
-
-	if err != nil || replicationQueryOutput == nil {
-		errMsg := fmt.Sprintf(
-			"Can't connec to PostgreSQL using user %s on %s connection.",
-			pgInit.GetPgUser(),
-			pgInit.ConnectionType,
+		output, err := cmd.Single(
+			"pg-replication-check",
+			false,
+			true,
+			"sudo",
+			"-u", pgInit.GetPostgresOsUser(),
+			pgInit.PostgresPath+"/bin/psql",
+			"-t",
+			"-w",
+			"-P", "format=unaligned",
+			"-w",
+			"-c", fmt.Sprintf(dao.PgLocalReplicationCheckQuery, pgInit.GetPostgresOsUser()),
 		)
 
-		log.Error(errMsg)
-		return responseerror.Clarify(errMsg)
+		queryResult = util.TrimmedString(output)
+
+		if err != nil {
+			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
+			return responseerror.From("Can't connect to PostgreSQL. Is it running and the configuration is correct?")
+		}
 	}
 
-	if "REPLICATION_ALLOWED" != strings.TrimSpace(*replicationQueryOutput) {
+	if queryResult == cmd.EmptyOutput {
+		errMsg := "Can't connect to PostgreSQL. Is it running and the configuration is correct?"
+
+		log.Error(errMsg)
+		return responseerror.From(errMsg)
+	}
+
+	if "REPLICATION_ALLOWED" != strings.TrimSpace(queryResult) {
 		errMsg := fmt.Sprintf(
 			"Replication is not enabled for user %s on %s connection.",
 			pgInit.GetPgUser(),
@@ -176,13 +241,13 @@ func checkPgReplication(pgInit *repo.PgInitDto) error {
 		)
 
 		log.Error(errMsg)
-		return responseerror.Clarify(errMsg)
+		return responseerror.From(errMsg)
 	}
 
 	return nil
 }
 
-func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg) (dao.Pg, error) {
+func insertPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg) (dao.Pg, error) {
 	var createdPg dao.Pg
 	var err error
 
@@ -196,6 +261,7 @@ func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 			ConnectionType: "local",
 			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
 			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
+			SslMode:        sql.NullString{String: pgInit.SslMode, Valid: pgInit.IsHostConnection()},
 			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
 			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
 			Status:         dao.PgStarted,
@@ -214,6 +280,7 @@ func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 			ConnectionType: pgInit.ConnectionType,
 			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
 			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
+			SslMode:        sql.NullString{String: pgInit.SslMode, Valid: pgInit.IsHostConnection()},
 			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
 			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
 			Status:         dao.PgStarted,
@@ -225,34 +292,12 @@ func createPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 
 	if err != nil {
 		log.Errorf("Cannot add Postgres data: %v", err)
-		return dao.Pg{}, responseerror.Clarify("Cannot save Postgres info, please check logs")
+		return dao.Pg{}, responseerror.From("Cannot save Postgres info, please check logs")
 	}
 
 	log.Infof("Created postgres entry: %v", createdPg)
 	return createdPg, nil
 }
-
-//func linkRepoWithPg(ctx context.Context, repo *dao.Repo, pg dao.Pg) error {
-//	if pg.re.Valid {
-//		log.Infof("Pg is already linked to repo: %v", repo)
-//		return nil
-//	}
-//
-//	updateRepoPgParams := dao.UpdatePgRepoParams{
-//		ID:     pg.ID,
-//		RepoID: repo.ID,
-//	}
-//
-//	log.Infof("Linking repo with pg: %v", updateRepoPgParams)
-//	updatedPg, err := data.Fetcher.UpdatePgRepo(ctx, updateRepoPgParams)
-//	if err != nil {
-//		log.Errorf("Cannot update repo pgParams: %v", err)
-//		return responseerror.Clarify("Cannot save Postgres info, please check logs")
-//	}
-//
-//	log.Infof("Linked repo with pg: %v", updatedPg)
-//	return nil
-//}
 
 func copyPostgresData(
 	pgInit *repo.PgInitDto,
@@ -304,9 +349,10 @@ func copyPostgresData(
 		)
 	} else {
 		backupCmd = cmd.Get(
+			"sudo",
+			"-u", pgInit.GetPostgresOsUser(),
 			pgBaseBackupPath,
 			"-w",
-			"-U", pgInit.GetPostgresOsUser(),
 			"-D", mainDatasetPath,
 		)
 	}

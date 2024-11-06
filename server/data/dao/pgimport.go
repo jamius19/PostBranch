@@ -1,6 +1,16 @@
 package dao
 
-var PgSuperUserCheckQuery = `\du %s;`
+import (
+	"database/sql"
+	"fmt"
+	"github.com/jamius19/postbranch/data/dto/repo"
+	"github.com/jamius19/postbranch/logger"
+	"github.com/jamius19/postbranch/service/pg"
+	"github.com/jamius19/postbranch/web/responseerror"
+)
+
+var log = logger.Logger
+var PgSuperUserCheckQuery = `select usesuper from pg_user where usename = CURRENT_USER;`
 
 var PgConfigFilePathsQuery = `SELECT DISTINCT(sourcefile) FROM pg_settings WHERE source = 'configuration file';`
 
@@ -18,8 +28,7 @@ var PgLocalReplicationCheckQuery = `SELECT CASE
            ) 
            THEN 'REPLICATION_ALLOWED'
            ELSE 'REPLICATION_NOT_ALLOWED'
-       END AS replication_status;
-`
+       END AS replication_status;`
 
 // TODO: Fix potential sql injection
 var PgHostReplicationCheckQuery = `SELECT CASE 
@@ -33,5 +42,55 @@ var PgHostReplicationCheckQuery = `SELECT CASE
            ) 
            THEN 'REPLICATION_ALLOWED'
            ELSE 'REPLICATION_NOT_ALLOWED'
-       END AS replication_status;
-`
+       END AS replication_status;`
+
+const errMsg = "Can't connect to PostgreSQL. Is it running and is the provided configuration correct?"
+
+func GetConnString(pg pg.AuthInfo) string {
+	return fmt.Sprintf(
+		"user=%s host=%s port=%d password=%s dbname=postgres sslmode=%s",
+		pg.GetDbUsername(),
+		pg.GetHost(),
+		pg.GetPort(),
+		pg.GetPassword(),
+		pg.GetSslMode(),
+	)
+}
+
+func RunQuery(pgInit *repo.PgInitDto, query string) (*sql.DB, *sql.Rows, func(), error) {
+	cleanup := func() {}
+
+	db, err := sql.Open("postgres", GetConnString(pgInit))
+	if err != nil {
+		log.Errorf("Failed to open db: %v", err)
+		return nil, nil, cleanup, responseerror.From(errMsg)
+	}
+
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Errorf("Failed to run query: %s, error: %v", query, err)
+
+		if db != nil {
+			if err := db.Close(); err != nil {
+				log.Errorf("Failed to close db: %v", err)
+			}
+		}
+
+		return nil, nil, cleanup, responseerror.From(errMsg)
+	}
+
+	cleanup = func() {
+		if db != nil {
+			if err := db.Close(); err != nil {
+				log.Errorf("Failed to close db: %v", err)
+			}
+		}
+
+		if rows != nil {
+			if err := rows.Close(); err != nil {
+				log.Errorf("Failed to close rows: %v", err)
+			}
+		}
+	}
+	return db, rows, cleanup, err
+}

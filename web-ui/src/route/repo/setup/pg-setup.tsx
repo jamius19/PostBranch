@@ -20,7 +20,7 @@ import {importPg} from "@/service/repo-service.ts";
 import React, {useCallback} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Check} from "lucide-react";
+import {ArrowRight, Check, SquareArrowOutUpRight} from "lucide-react";
 import {isInteger} from "@/util/lib.ts";
 
 const baseFormSchema = z.object({
@@ -60,6 +60,7 @@ const customConnectionFormSchema = z.object({
     port: z.number()
         .min(1, "Database port is required")
         .max(65535, "Database port must be between 1 and 65535"),
+    sslMode: z.enum(["disable", "require", "verify-ca", "verify-full"]),
     dbUsername: z.string()
         .min(1, "Database username is required")
         .refine(value => !value.includes(" "), {
@@ -82,6 +83,7 @@ const defaultValues: RepoPgInitDto = {
     postgresOsUser: "postgres",
     host: "localhost",
     port: 5432,
+    sslMode: "disable",
     dbUsername: "postgres",
     password: "",
 };
@@ -305,13 +307,14 @@ const PgSetup = () => {
                                             <FormLabel>Host</FormLabel>
                                             <FormControl>
                                                 <Input {...field}
-                                                       disabled={repoInitPending || repoInitSuccess}
+                                                       disabled={true}
                                                        readOnly={true}
                                                        spellCheck="false"
                                                        placeholder="localhost"/>
                                             </FormControl>
                                             <FormDescription>
-                                                PostgreSQL server hostname, currently only <code>localhost</code> is
+                                                PostgreSQL server hostname, currently only <code
+                                                className={"font-bold"}>localhost</code> is
                                                 supported
                                             </FormDescription>
                                             <FormMessage/>
@@ -343,6 +346,50 @@ const PgSetup = () => {
                                     )}
                                 />
                             </div>
+
+                            <FormField
+                                control={pgForm.control}
+                                name="sslMode"
+                                render={({field}) => (
+                                    <FormItem>
+                                        <FormLabel>Postgres SSL Mode</FormLabel>
+                                        <Select
+                                            disabled={repoInitPending || repoInitSuccess}
+                                            defaultValue={String(field.value)}
+                                            onValueChange={(value: string) => {
+                                                field.onChange(value);
+                                            }}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select Postgres SSL Mode"/>
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="disable">disable</SelectItem>
+                                                <SelectItem value="verify-ca">verify-ca</SelectItem>
+                                                <SelectItem value="verify-full">verify-full</SelectItem>
+                                                <SelectItem value="require">require</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <FormDescription>
+                                            Select the SSL Mode for connecting to PostgreSQL.
+                                            Use the <code
+                                            className={"font-bold"}>disable</code> mode if you&#39;re unsure.<br/>
+                                            Learn more about it in the&nbsp;
+                                            <a
+                                                target={"_blank"}
+                                                rel={"noreferrer"}
+                                                href={"https://www.postgresql.org/docs/current/libpq-ssl.html"}
+                                                className={"text-blue-600"}>
+                                                Postgres Documentation
+                                                <SquareArrowOutUpRight className={"ms-0.5 inline relative top-[-1.5px]"}
+                                                                       size={13}/>
+                                            </a>
+                                        </FormDescription>
+                                        <FormMessage/>
+                                    </FormItem>
+                                )}
+                            />
 
                             <FormField
                                 control={pgForm.control}

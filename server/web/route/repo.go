@@ -42,7 +42,7 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Error fetching similar repository"),
+			responseerror.From("Error fetching similar repository"),
 			http.StatusInternalServerError,
 		)
 
@@ -52,7 +52,7 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Repository exists with same name and/or path"),
+			responseerror.From("Repository exists with same name and/or path"),
 			http.StatusBadRequest,
 		)
 
@@ -96,7 +96,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 				util.WriteError(
 					w,
 					r,
-					responseerror.Clarify("Failed to load repositories"),
+					responseerror.From("Failed to load repositories"),
 					http.StatusInternalServerError,
 				)
 				return
@@ -116,7 +116,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 				util.WriteError(
 					w,
 					r,
-					responseerror.Clarify("Failed to load repositories"),
+					responseerror.From("Failed to load repositories"),
 					http.StatusInternalServerError,
 				)
 				return
@@ -161,7 +161,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Repo ID should be a number"),
+			responseerror.From("Repo ID should be a number"),
 			http.StatusBadRequest,
 		)
 
@@ -175,7 +175,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Invalid Repository ID"),
+			responseerror.From("Invalid Repository ID"),
 			http.StatusNotFound,
 		)
 		return
@@ -192,7 +192,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 			util.WriteError(
 				w,
 				r,
-				responseerror.Clarify("Failed to load repositories"),
+				responseerror.From("Failed to load repositories"),
 				http.StatusInternalServerError,
 			)
 			return
@@ -212,7 +212,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 			util.WriteError(
 				w,
 				r,
-				responseerror.Clarify("Failed to load repositories"),
+				responseerror.From("Failed to load repositories"),
 				http.StatusInternalServerError,
 			)
 			return
@@ -253,7 +253,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Repo ID should be a number"),
+			responseerror.From("Repo ID should be a number"),
 			http.StatusBadRequest,
 		)
 
@@ -267,7 +267,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Invalid Repository ID"),
+			responseerror.From("Invalid Repository ID"),
 			http.StatusNotFound,
 		)
 		return
@@ -279,7 +279,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Failed to delete repository"),
+			responseerror.From("Failed to delete repository"),
 			http.StatusInternalServerError,
 		)
 

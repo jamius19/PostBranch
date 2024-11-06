@@ -30,6 +30,7 @@ type Pg struct {
 	Port           sql.NullInt64
 	Username       sql.NullString
 	Password       sql.NullString
+	SslMode        sql.NullString
 	Status         string
 	Output         sql.NullString
 	RepoID         int64

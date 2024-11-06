@@ -37,6 +37,6 @@ func AddAndGetErrors(ctx context.Context, error string) *[]string {
 	return &requestErrors.Errors
 }
 
-func Clarify(msg string) error {
+func From(msg string) error {
 	return errors.New(msg)
 }

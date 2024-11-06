@@ -350,7 +350,7 @@ UPDATE pg
 SET repo_id    = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
 `
 
 type UpdatePgRepoParams struct {
@@ -372,6 +372,7 @@ func (q *Queries) UpdatePgRepo(ctx context.Context, arg UpdatePgRepoParams) (Pg,
 		&i.Port,
 		&i.Username,
 		&i.Password,
+		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,

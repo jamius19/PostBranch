@@ -22,7 +22,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Repo ID should be a number"),
+			responseerror.From("Repo ID should be a number"),
 			http.StatusBadRequest,
 		)
 
@@ -41,7 +41,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if pgInit.IsHostConnection() && pgInit.Host != "localhost" {
-		util.WriteError(w, r, responseerror.Clarify("Only localhost is supported for now"), http.StatusBadRequest)
+		util.WriteError(w, r, responseerror.From("Only localhost is supported for now"), http.StatusBadRequest)
 		return
 	}
 
@@ -54,7 +54,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.Clarify("Invalid Repository ID"),
+			responseerror.From("Invalid Repository ID"),
 			http.StatusInternalServerError,
 		)
 		return
@@ -72,7 +72,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 			util.WriteError(
 				w,
 				r,
-				responseerror.Clarify("Failed to load repositories"),
+				responseerror.From("Failed to load repositories"),
 				http.StatusInternalServerError,
 			)
 			return
@@ -84,7 +84,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 			util.WriteError(
 				w,
 				r,
-				responseerror.Clarify("Postgres is already imported for this repository"),
+				responseerror.From("Postgres is already imported for this repository"),
 				http.StatusBadRequest,
 			)
 			return
@@ -94,7 +94,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 			util.WriteError(
 				w,
 				r,
-				responseerror.Clarify("Postgres import in progress for this repository"),
+				responseerror.From("Postgres import in progress for this repository"),
 				http.StatusBadRequest,
 			)
 			return

@@ -44,7 +44,7 @@ func CreateSparseFile(imgPath string, sizeInMb int64) error {
 	err := CreateDirectories(path)
 	if err != nil {
 		log.Errorf("Failed to create directories for the sparse file. Error: %s", err)
-		return responseerror.Clarify("Failed to create directories for the sparse file")
+		return responseerror.From("Failed to create directories for the sparse file")
 	}
 
 	// Open or create the file

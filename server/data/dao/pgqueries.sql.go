@@ -11,10 +11,20 @@ import (
 )
 
 const createPg = `-- name: CreatePg :one
-INSERT INTO pg (pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status,
+INSERT INTO pg (pg_path,
+                version,
+                stop_pg,
+                pg_user,
+                connection_type,
+                host,
+                port,
+                ssl_mode,
+                username,
+                password,
+                status,
                 repo_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
 `
 
 type CreatePgParams struct {
@@ -25,6 +35,7 @@ type CreatePgParams struct {
 	ConnectionType string
 	Host           sql.NullString
 	Port           sql.NullInt64
+	SslMode        sql.NullString
 	Username       sql.NullString
 	Password       sql.NullString
 	Status         string
@@ -40,6 +51,7 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 		arg.ConnectionType,
 		arg.Host,
 		arg.Port,
+		arg.SslMode,
 		arg.Username,
 		arg.Password,
 		arg.Status,
@@ -57,6 +69,7 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 		&i.Port,
 		&i.Username,
 		&i.Password,
+		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,
@@ -67,7 +80,7 @@ func (q *Queries) CreatePg(ctx context.Context, arg CreatePgParams) (Pg, error) 
 }
 
 const getPg = `-- name: GetPg :one
-SELECT id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+SELECT id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
 FROM pg
 WHERE id = ?
 `
@@ -86,6 +99,7 @@ func (q *Queries) GetPg(ctx context.Context, id int64) (Pg, error) {
 		&i.Port,
 		&i.Username,
 		&i.Password,
+		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,
@@ -104,12 +118,13 @@ SET pg_path         = ?,
     connection_type = ?,
     host            = ?,
     port            = ?,
+    ssl_mode        =?,
     username        = ?,
     password        = ?,
     status          = ?,
     updated_at      = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
 `
 
 type UpdatePgParams struct {
@@ -120,6 +135,7 @@ type UpdatePgParams struct {
 	ConnectionType string
 	Host           sql.NullString
 	Port           sql.NullInt64
+	SslMode        sql.NullString
 	Username       sql.NullString
 	Password       sql.NullString
 	Status         string
@@ -135,6 +151,7 @@ func (q *Queries) UpdatePg(ctx context.Context, arg UpdatePgParams) (Pg, error) 
 		arg.ConnectionType,
 		arg.Host,
 		arg.Port,
+		arg.SslMode,
 		arg.Username,
 		arg.Password,
 		arg.Status,
@@ -152,6 +169,7 @@ func (q *Queries) UpdatePg(ctx context.Context, arg UpdatePgParams) (Pg, error) 
 		&i.Port,
 		&i.Username,
 		&i.Password,
+		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,
@@ -167,7 +185,7 @@ SET status     = ?,
     output     = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, status, output, repo_id, created_at, updated_at
+RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
 `
 
 type UpdatePgStatusParams struct {
@@ -190,6 +208,7 @@ func (q *Queries) UpdatePgStatus(ctx context.Context, arg UpdatePgStatusParams) 
 		&i.Port,
 		&i.Username,
 		&i.Password,
+		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,
