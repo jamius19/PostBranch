@@ -13,7 +13,7 @@ import (
 func findFreeLoopNo() (int, error) {
 	controlFd, err := os.OpenFile("/dev/loop-control", os.O_RDWR, 0)
 	if err != nil {
-		return -1, fmt.Errorf("failed to open /dev/loop-control: %w", err)
+		log.Fatal("Can't open /dev/loop-control for managing loop devices!")
 	}
 	defer controlFd.Close()
 

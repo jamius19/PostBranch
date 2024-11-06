@@ -87,6 +87,10 @@ func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
 		if err := os.Remove(loopbackPath); err != nil {
 			return fmt.Errorf("failed to remove loopback device: %w", err)
 		}
+
+		if err := os.Remove(pool.Path); err != nil {
+			return fmt.Errorf("failed to remove pool image: %w", err)
+		}
 	}
 
 	if err := os.RemoveAll(pool.MountPath); err != nil {

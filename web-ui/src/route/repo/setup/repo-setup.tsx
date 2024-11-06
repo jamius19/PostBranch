@@ -112,7 +112,6 @@ const RepoSetup = () => {
     const repoType = repoForm.watch("repoType");
 
     const onSubmit = useCallback(async (data: RepoInitDto) => {
-        console.log(data);
         await repoInit.mutateAsync(data);
     }, [repoInit]);
 
