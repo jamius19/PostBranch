@@ -54,14 +54,17 @@ func Initialize(rootCtx context.Context, webWg *sync.WaitGroup) {
 		log.Info("Received interrupt/terminate signal, shutting down...")
 	}
 
-	zfs.UnmountAll()
+	err = zfs.UnmountAll()
+	if err != nil {
+		log.Errorf("Failed to unmount ZFS pool(s). error: %s", err)
+	}
 
 	// Create shutdown context as child of root context
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Errorf("Server shutdown error: %v", err)
+		log.Errorf("Failed to shutdown server. error: %v", err)
 	}
 }
 

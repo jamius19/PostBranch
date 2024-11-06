@@ -3,7 +3,6 @@ package zfs
 import (
 	"context"
 	"fmt"
-	"github.com/elliotchance/orderedmap/v2"
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
@@ -11,7 +10,7 @@ import (
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
-	"strings"
+	"os"
 )
 
 var log = logger.Logger
@@ -19,39 +18,18 @@ var log = logger.Logger
 func VirtualPool(ctx context.Context, repoinit *repo.InitDto) (*dao.ZfsPool, error) {
 	log.Infof("ZFS Pool init %v", *repoinit)
 
-	_, path := util.SplitPath(repoinit.Path)
-	log.Infof("Creating virtual disk file at %s", repoinit.Path)
-
-	//
-	// Set the Commands
-	//
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-	cmds.Set("create-folder", cmd.Get("mkdir", "-p", path))
-
-	filesize := fmt.Sprintf("%dM", repoinit.SizeInMb)
-	cmds.Set("create-file", cmd.Get("fallocate", "-l", filesize, repoinit.Path))
-
-	loopNo, err := findFreeLoopDevice()
-	if err != nil {
-		log.Errorf("Failed to find free loop device: %s", err)
-		return nil, responseerror.Clarify("Failed to find free loop device")
+	if err := CreateSparseFile(repoinit.Path, repoinit.SizeInMb); err != nil {
+		log.Errorf("Failed to create sparse file. Error: %s", err)
+		return nil, responseerror.Clarify("Failed to create sparse file")
 	}
 
-	loopDevice := fmt.Sprintf("/dev/loop%d", loopNo)
-
-	cmds.Set("create-loop-node", cmd.Get("mknod", loopDevice, "b", "7", fmt.Sprintf("%d", loopNo)))
-	cmds.Set("setup-loopback", cmd.Get("losetup", loopDevice, repoinit.Path))
-
-	//
-	// Run the Commands
-	//
-	_, err = cmd.Multi(cmds)
+	loopNo, err := SetupLoopDevice(repoinit.Path)
 	if err != nil {
-		log.Errorf("Failed to create virtual disk: %s", err)
-		return nil, responseerror.Clarify("Error creating virtual disk")
+		log.Errorf("Failed to setup loopback device. Error: %s", err)
+		return nil, responseerror.Clarify("Failed to setup loopback device")
 	}
 
-	pool, err := createPool(ctx, repoinit, loopDevice)
+	pool, err := createPool(ctx, repoinit, loopNo)
 	if err != nil {
 		log.Errorf("Failed to create createPool: %s", err)
 		return nil, err
@@ -60,7 +38,8 @@ func VirtualPool(ctx context.Context, repoinit *repo.InitDto) (*dao.ZfsPool, err
 	return pool, nil
 }
 
-func createPool(ctx context.Context, repoinit *repo.InitDto, devicePath string) (*dao.ZfsPool, error) {
+func createPool(ctx context.Context, repoinit *repo.InitDto, loopNo int) (*dao.ZfsPool, error) {
+	devicePath := fmt.Sprintf("/dev/loop%d", loopNo)
 	mountPath := fmt.Sprintf("/mnt/pb-%s", repoinit.Name)
 
 	_, err := cmd.Single(
@@ -114,93 +93,86 @@ func MountAll() error {
 
 	log.Infof("Mounting all pools")
 
-	// failedPoolIds will contain the IDs of the pools that failed to mount
-	var failedPoolIds []int64
+	// failedPools will contain the list of the pool(s) for which loopback device(s) failed to mount
+	var failedPools []dao.ZfsPool
 
 	for _, pool := range pools {
 		if pool.PoolType == "virtual" {
-			err := setupLoopback(&pool)
-			if err != nil {
-				failedPoolIds = append(failedPoolIds, pool.ID)
+			if err := setupLoopback(&pool); err != nil {
+				failedPools = append(failedPools, pool)
 				log.Errorf("Failed to setup loopback for pool %v: %s", pool, err)
 			}
+
+		} else {
+			log.Infof("Pool is not virtual, skipping loopback setup. pool %v", pool)
 		}
 	}
 
+	if len(failedPools) > 0 {
+		log.Errorf("Failed to setup loopback for the following pools: %v", failedPools)
+	}
+
 	log.Infof("**** This is a time consuming operation. Please wait. ****")
+
 	output, err := cmd.Single("import-zpools", false, false, "zpool", "import", "-a")
 	if err != nil {
 		log.Errorf("Failed to import zpools: %s, output: %s", err, util.SafeStringVal(output))
 		return err
 	}
-	log.Infof("**** Done! Thank you for your patience! :) ****")
 
+	log.Infof("**** Done! Thank you for your patience! :) ****")
 	log.Infof("%d pool(s) are mounted.", len(pools))
+
 	// TODO: Start postgres
 
 	return nil
 }
 
 func setupLoopback(pool *dao.ZfsPool) error {
-	if pool.PoolType != "virtual" {
-		log.Infof("Pool is not virtual, skipping loopback setup. pool %v", pool)
-		return nil
-	}
-
-	log.Infof("Unmounting in case it's already mounted. pool %v", pool)
-	_, err := cmd.Single("zpool-export", false, false, "zpool", "export", pool.Name)
-
+	err := cleanDanglingLoopbackDevices(pool)
 	if err != nil {
-		log.Infof("[IGNORE] Failed to export pool: %s", err)
-	}
-
-	log.Infof("Detaching any dangling loop devices. pool %v", pool)
-	loopbackOutput, err := cmd.Single(
-		"find-loopback-"+pool.Name,
-		false,
-		false,
-		"su", "-c",
-		fmt.Sprintf(FindLoopBackCmd, pool.Path),
-	)
-
-	if output := util.TrimmedString(loopbackOutput); err == nil && output != cmd.EmptyOutput {
-		log.Infof("Loopback found for pool %v, output: %s", pool, output)
-		devices := strings.Split(output, "\n")
-
-		for _, device := range devices {
-			log.Infof("Detaching loopback device %s", device)
-
-			cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-			cmds.Set("detach-loopback", cmd.Get("losetup", "-d", device))
-			cmds.Set("remove-loopback", cmd.Get("rm", device))
-			_, err = cmd.Multi(cmds)
-			if err != nil {
-				log.Errorf("Failed to remove loopback device %s: %s", device, err)
-				return err
-			}
-		}
-	} else {
-		log.Infof("[IGNORE] Failed to find loopback for pool %v, output: %s, error: %s", pool, output, err)
+		return err
 	}
 
 	log.Infof("Setting up loopbacks for pool %v", pool)
-	loopNo, err := findFreeLoopDevice()
-	if err != nil {
-		log.Errorf("Failed to find free loop device: %s", err)
+	if _, err := SetupLoopDevice(pool.Path); err != nil {
 		return err
 	}
 
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-	loopDevice := fmt.Sprintf("/dev/loop%d", loopNo)
-	cmds.Set("create-loop-node", cmd.Get("mknod", loopDevice, "b", "7", fmt.Sprintf("%d", loopNo)))
-	cmds.Set("setup-loopback", cmd.Get("losetup", loopDevice, pool.Path))
+	return nil
+}
 
-	_, err = cmd.Multi(cmds)
+func cleanDanglingLoopbackDevices(pool *dao.ZfsPool) error {
+	log.Infof("Unmounting in case it's already mounted. pool %v", pool)
+	_, err := cmd.Single("zpool-export", true, false, "zpool", "export", pool.Name)
+
 	if err != nil {
-		log.Errorf("Failed to setup loopback for pool, error %s", err)
+		log.Infof("Pool is not mounted. Continuing. pool: %v", pool)
+	} else {
+		log.Warnf("Pool is already mounted. Unmounting it. pool: %v", pool)
+	}
+
+	devices, err := FindLoopDeviceFromSys(pool.Path)
+	if err != nil {
+		log.Errorf("Failed to find loopback for pool %v, error: %s", pool, err)
 		return err
 	}
 
+	if len(devices) > 0 {
+		log.Warnf("Dangling loopback devices found for pool %v, devices: %v", pool, devices)
+		log.Warnf("Releasing dangling loopback devices for pool %v", pool)
+	}
+
+	for _, device := range devices {
+		if err := ReleaseLoopDevice(device); err != nil {
+			return fmt.Errorf("failed to release loopback device: %s", err)
+		}
+
+		if err := os.Remove(device); err != nil {
+			log.Errorf("Failed to remove loopback device %s: %s", device, err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -218,8 +190,7 @@ func UnmountAll() error {
 	}
 
 	for _, pool := range pools {
-		err := Unmount(&pool)
-		if err != nil {
+		if err := Unmount(&pool); err != nil {
 			log.Errorf("Failed to unmount pool: %v, error: %s", pool, err)
 			return err
 		}
@@ -230,32 +201,37 @@ func UnmountAll() error {
 
 func Unmount(pool *dao.ZfsPool) error {
 	log.Infof("Unmounting pool %v", pool)
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
 
 	// TODO: Stop running postgres
 
-	cmds.Set(
-		"zpool-export",
-		cmd.Get("zpool", "export", pool.Name),
-	)
-
-	if pool.PoolType == "virtual" {
-		loopbackPath, err := FindDevicePath(pool)
-		if err != nil {
-			return err
-		}
-
-		loopbackPath = "/dev/" + loopbackPath
-
-		cmds.Set("loopback-detach", cmd.Get("losetup", "-d", loopbackPath))
-		cmds.Set("remove-device", cmd.Get("rm", "-rf", loopbackPath))
-	}
-
-	cmds.Set("remove-mount-path", cmd.Get("rm", "-rf", pool.MountPath))
-
-	_, err := cmd.Multi(cmds)
+	loopbackPath, err := FindDevicePath(pool)
 	if err != nil {
 		return err
+	}
+
+	_, err = cmd.Single(
+		"zpool-export",
+		false,
+		false,
+		"zpool", "export", pool.Name,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	if pool.PoolType == "virtual" {
+		if err := ReleaseLoopDevice(loopbackPath); err != nil {
+			return fmt.Errorf("failed to release loopback device: %s", err)
+		}
+
+		if err := os.Remove(loopbackPath); err != nil {
+			return fmt.Errorf("failed to remove loopback device: %w", err)
+		}
+	}
+
+	if err := os.RemoveAll(pool.MountPath); err != nil {
+		return fmt.Errorf("failed to remove mount path: %w", err)
 	}
 
 	return nil
@@ -275,5 +251,5 @@ func FindDevicePath(pool *dao.ZfsPool) (string, error) {
 		return "", err
 	}
 
-	return util.TrimmedString(devicePath), nil
+	return "/dev/" + util.TrimmedString(devicePath), nil
 }

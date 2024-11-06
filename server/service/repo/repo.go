@@ -2,7 +2,7 @@ package repo
 
 import (
 	"context"
-	"github.com/elliotchance/orderedmap/v2"
+	"fmt"
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
@@ -10,6 +10,7 @@ import (
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo/zfs"
 	"github.com/jamius19/postbranch/web/responseerror"
+	"os"
 )
 
 var log = logger.Logger
@@ -65,30 +66,31 @@ func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
 
 	// TODO: Stop postgres
 
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-
-	cmds.Set(
-		"zpool-destroy",
-		cmd.Get("zpool", "destroy", "-f", pool.Name),
-	)
-
-	if pool.PoolType == "virtual" {
-		loopbackPath, err := zfs.FindDevicePath(pool)
-		if err != nil {
-			return err
-		}
-
-		loopbackPath = "/dev/" + loopbackPath
-		cmds.Set("loopback-detach", cmd.Get("losetup", "-d", loopbackPath))
-		cmds.Set("remove-device", cmd.Get("rm", "-rf", loopbackPath))
+	loopbackPath, err := zfs.FindDevicePath(pool)
+	if err != nil {
+		return err
 	}
 
-	cmds.Set("remove-mount-path", cmd.Get("rm", "-rf", pool.MountPath))
-	_, err := cmd.Multi(cmds)
+	_, err = cmd.Single(
+		"zpool-destroy", false, false, "zpool", "destroy", "-f", pool.Name,
+	)
 
 	if err != nil {
-		log.Errorf("Failed to delete repo: %v, pool: %v, error: %s", repo, pool, err)
-		return err
+		return fmt.Errorf("failed to destroy pool: %s", err)
+	}
+
+	if pool.PoolType == "virtual" {
+		if err := zfs.ReleaseLoopDevice(loopbackPath); err != nil {
+			return fmt.Errorf("failed to release loopback device: %s", err)
+		}
+
+		if err := os.Remove(loopbackPath); err != nil {
+			return fmt.Errorf("failed to remove loopback device: %w", err)
+		}
+	}
+
+	if err := os.RemoveAll(pool.MountPath); err != nil {
+		return fmt.Errorf("failed to remove mount path: %w", err)
 	}
 
 	err = data.Fetcher.DeletePool(ctx, pool.ID)
