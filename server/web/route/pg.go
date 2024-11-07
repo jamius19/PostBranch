@@ -45,7 +45,7 @@ func ImportPg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Infof("Importing Postgres, pgInit: %v", pgInit)
+	log.Infof("Importing Postgres, pgInit: %s", pgInit.String())
 
 	repoDataQuery, err := data.Fetcher.GetRepo(r.Context(), repoId)
 	if err != nil {

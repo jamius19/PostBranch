@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"fmt"
 	"github.com/go-playground/validator/v10"
 	"slices"
 	"strings"
@@ -27,48 +28,74 @@ type PgInitDto struct {
 	Password       string `json:"password,omitempty" validate:"required_if=CustomConnection true,pgInitCon"`
 }
 
-func (pgCheck *PgInitDto) GetPostgresPath() string {
-	return pgCheck.PostgresPath
+func (pgInit *PgInitDto) GetPostgresPath() string {
+	return pgInit.PostgresPath
 }
 
-func (pgCheck *PgInitDto) GetConnectionType() string {
-	return pgCheck.ConnectionType
+func (pgInit *PgInitDto) GetConnectionType() string {
+	return pgInit.ConnectionType
 }
 
-func (pgCheck *PgInitDto) GetPostgresOsUser() string {
-	return pgCheck.PostgresOsUser
+func (pgInit *PgInitDto) GetPostgresOsUser() string {
+	return pgInit.PostgresOsUser
 }
 
-func (pgCheck *PgInitDto) GetHost() string {
-	return pgCheck.Host
+func (pgInit *PgInitDto) GetHost() string {
+	return pgInit.Host
 }
 
-func (pgCheck *PgInitDto) GetPort() int {
-	return pgCheck.Port
+func (pgInit *PgInitDto) GetPort() int {
+	return pgInit.Port
 }
 
-func (pgCheck *PgInitDto) GetDbUsername() string {
-	return pgCheck.DbUsername
+func (pgInit *PgInitDto) GetDbUsername() string {
+	return pgInit.DbUsername
 }
 
-func (pgCheck *PgInitDto) GetPassword() string {
-	return pgCheck.Password
+func (pgInit *PgInitDto) GetPassword() string {
+	return pgInit.Password
 }
 
-func (pgCheck *PgInitDto) GetSslMode() string {
-	return pgCheck.SslMode
+func (pgInit *PgInitDto) GetSslMode() string {
+	return pgInit.SslMode
 }
 
-func (pgCheck *PgInitDto) IsHostConnection() bool {
-	return pgCheck.ConnectionType == "host"
+func (pgInit *PgInitDto) IsHostConnection() bool {
+	return pgInit.ConnectionType == "host"
 }
 
-func (pgCheck *PgInitDto) GetPgUser() string {
-	if pgCheck.IsHostConnection() {
-		return pgCheck.DbUsername
+func (pgInit *PgInitDto) GetPgUser() string {
+	if pgInit.IsHostConnection() {
+		return pgInit.DbUsername
 	} else {
-		return pgCheck.PostgresOsUser
+		return pgInit.PostgresOsUser
 	}
+}
+
+func (pgInit *PgInitDto) String() string {
+	if pgInit.IsHostConnection() {
+		return fmt.Sprintf(
+			"{%s %d %t %s %s %s %d %s %s *****}",
+			pgInit.PostgresPath,
+			pgInit.Version,
+			pgInit.StopPostgres,
+			pgInit.ConnectionType,
+			pgInit.PostgresOsUser,
+			pgInit.Host,
+			pgInit.Port,
+			pgInit.SslMode,
+			pgInit.DbUsername,
+		)
+	}
+
+	return fmt.Sprintf(
+		"{%s %d %t %s %s}",
+		pgInit.PostgresPath,
+		pgInit.Version,
+		pgInit.StopPostgres,
+		pgInit.ConnectionType,
+		pgInit.PostgresOsUser,
+	)
 }
 
 func PgInitCheckValidation(fl validator.FieldLevel) bool {
