@@ -116,13 +116,6 @@ SELECT rp.id              AS repo_id,
        pg.id              AS pg_id,
        pg.pg_path         AS pg_path,
        pg.version         AS pg_version,
-       pg.stop_pg         AS pg_stop_pg,
-       pg.pg_user         AS pg_pg_user,
-       pg.connection_type AS pg_connection_type,
-       pg.host            AS pg_host,
-       pg.port            AS pg_port,
-       pg.username        AS pg_username,
-       pg.password        AS pg_password,
        pg.status          AS pg_status,
        pg.output          AS pg_output,
        pg.created_at      AS pg_created_at,
@@ -134,32 +127,25 @@ WHERE rp.id = ?
 `
 
 type GetRepoRow struct {
-	RepoID           int64
-	RepoName         string
-	RepoCreatedAt    time.Time
-	RepoUpdatedAt    time.Time
-	PoolID           int64
-	PoolPath         string
-	PoolSizeInMb     int64
-	PoolName         string
-	PoolMountPath    string
-	PoolType         string
-	PoolCreatedAt    time.Time
-	PoolUpdatedAt    time.Time
-	PgID             sql.NullInt64
-	PgPath           sql.NullString
-	PgVersion        sql.NullInt64
-	PgStopPg         sql.NullBool
-	PgPgUser         sql.NullString
-	PgConnectionType sql.NullString
-	PgHost           sql.NullString
-	PgPort           sql.NullInt64
-	PgUsername       sql.NullString
-	PgPassword       sql.NullString
-	PgStatus         sql.NullString
-	PgOutput         sql.NullString
-	PgCreatedAt      sql.NullTime
-	PgUpdatedAt      sql.NullTime
+	RepoID        int64
+	RepoName      string
+	RepoCreatedAt time.Time
+	RepoUpdatedAt time.Time
+	PoolID        int64
+	PoolPath      string
+	PoolSizeInMb  int64
+	PoolName      string
+	PoolMountPath string
+	PoolType      string
+	PoolCreatedAt time.Time
+	PoolUpdatedAt time.Time
+	PgID          sql.NullInt64
+	PgPath        sql.NullString
+	PgVersion     sql.NullInt64
+	PgStatus      sql.NullString
+	PgOutput      sql.NullString
+	PgCreatedAt   sql.NullTime
+	PgUpdatedAt   sql.NullTime
 }
 
 func (q *Queries) GetRepo(ctx context.Context, id int64) (GetRepoRow, error) {
@@ -181,13 +167,6 @@ func (q *Queries) GetRepo(ctx context.Context, id int64) (GetRepoRow, error) {
 		&i.PgID,
 		&i.PgPath,
 		&i.PgVersion,
-		&i.PgStopPg,
-		&i.PgPgUser,
-		&i.PgConnectionType,
-		&i.PgHost,
-		&i.PgPort,
-		&i.PgUsername,
-		&i.PgPassword,
 		&i.PgStatus,
 		&i.PgOutput,
 		&i.PgCreatedAt,
@@ -249,13 +228,6 @@ SELECT rp.id              AS repo_id,
        pg.id              AS pg_id,
        pg.pg_path         AS pg_path,
        pg.version         AS pg_version,
-       pg.stop_pg         AS pg_stop_pg,
-       pg.pg_user         AS pg_pg_user,
-       pg.connection_type AS pg_connection_type,
-       pg.host            AS pg_host,
-       pg.port            AS pg_port,
-       pg.username        AS pg_username,
-       pg.password        AS pg_password,
        pg.status          AS pg_status,
        pg.output          AS pg_output,
        pg.created_at      AS pg_created_at,
@@ -267,32 +239,25 @@ ORDER BY rp.created_at DESC
 `
 
 type ListRepoRow struct {
-	RepoID           int64
-	RepoName         string
-	RepoCreatedAt    time.Time
-	RepoUpdatedAt    time.Time
-	PoolID           int64
-	PoolPath         string
-	PoolSizeInMb     int64
-	PoolName         string
-	PoolMountPath    string
-	PoolType         string
-	PoolCreatedAt    time.Time
-	PoolUpdatedAt    time.Time
-	PgID             sql.NullInt64
-	PgPath           sql.NullString
-	PgVersion        sql.NullInt64
-	PgStopPg         sql.NullBool
-	PgPgUser         sql.NullString
-	PgConnectionType sql.NullString
-	PgHost           sql.NullString
-	PgPort           sql.NullInt64
-	PgUsername       sql.NullString
-	PgPassword       sql.NullString
-	PgStatus         sql.NullString
-	PgOutput         sql.NullString
-	PgCreatedAt      sql.NullTime
-	PgUpdatedAt      sql.NullTime
+	RepoID        int64
+	RepoName      string
+	RepoCreatedAt time.Time
+	RepoUpdatedAt time.Time
+	PoolID        int64
+	PoolPath      string
+	PoolSizeInMb  int64
+	PoolName      string
+	PoolMountPath string
+	PoolType      string
+	PoolCreatedAt time.Time
+	PoolUpdatedAt time.Time
+	PgID          sql.NullInt64
+	PgPath        sql.NullString
+	PgVersion     sql.NullInt64
+	PgStatus      sql.NullString
+	PgOutput      sql.NullString
+	PgCreatedAt   sql.NullTime
+	PgUpdatedAt   sql.NullTime
 }
 
 func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
@@ -320,13 +285,6 @@ func (q *Queries) ListRepo(ctx context.Context) ([]ListRepoRow, error) {
 			&i.PgID,
 			&i.PgPath,
 			&i.PgVersion,
-			&i.PgStopPg,
-			&i.PgPgUser,
-			&i.PgConnectionType,
-			&i.PgHost,
-			&i.PgPort,
-			&i.PgUsername,
-			&i.PgPassword,
 			&i.PgStatus,
 			&i.PgOutput,
 			&i.PgCreatedAt,
@@ -350,7 +308,7 @@ UPDATE pg
 SET repo_id    = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
-RETURNING id, pg_path, version, stop_pg, pg_user, connection_type, host, port, username, password, ssl_mode, status, output, repo_id, created_at, updated_at
+RETURNING id, pg_path, version, status, output, repo_id, created_at, updated_at
 `
 
 type UpdatePgRepoParams struct {
@@ -365,14 +323,6 @@ func (q *Queries) UpdatePgRepo(ctx context.Context, arg UpdatePgRepoParams) (Pg,
 		&i.ID,
 		&i.PgPath,
 		&i.Version,
-		&i.StopPg,
-		&i.PgUser,
-		&i.ConnectionType,
-		&i.Host,
-		&i.Port,
-		&i.Username,
-		&i.Password,
-		&i.SslMode,
 		&i.Status,
 		&i.Output,
 		&i.RepoID,

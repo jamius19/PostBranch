@@ -20,22 +20,14 @@ type Branch struct {
 }
 
 type Pg struct {
-	ID             int64
-	PgPath         string
-	Version        int64
-	StopPg         bool
-	PgUser         string
-	ConnectionType string
-	Host           sql.NullString
-	Port           sql.NullInt64
-	Username       sql.NullString
-	Password       sql.NullString
-	SslMode        sql.NullString
-	Status         string
-	Output         sql.NullString
-	RepoID         int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID        int64
+	PgPath    string
+	Version   int64
+	Status    string
+	Output    sql.NullString
+	RepoID    int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Repo struct {

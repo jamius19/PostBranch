@@ -26,21 +26,14 @@ func SplitRepoRow(row *dao.GetRepoRow) (*dao.Repo, *dao.ZfsPool, *dao.Pg) {
 
 	if row.PgID.Valid {
 		pg = &dao.Pg{
-			ID:             row.PgID.Int64,
-			PgPath:         row.PgPath.String,
-			Version:        row.PgVersion.Int64,
-			StopPg:         row.PgStopPg.Bool,
-			PgUser:         row.PgPgUser.String,
-			ConnectionType: row.PgConnectionType.String,
-			Host:           row.PgHost,
-			Port:           row.PgPort,
-			Username:       row.PgUsername,
-			Password:       row.PgPassword,
-			Status:         row.PgStatus.String,
-			Output:         row.PgOutput,
-			RepoID:         row.RepoID,
-			CreatedAt:      row.PgCreatedAt.Time,
-			UpdatedAt:      row.PgUpdatedAt.Time,
+			ID:        row.PgID.Int64,
+			PgPath:    row.PgPath.String,
+			Version:   row.PgVersion.Int64,
+			Status:    row.PgStatus.String,
+			Output:    row.PgOutput,
+			RepoID:    row.RepoID,
+			CreatedAt: row.PgCreatedAt.Time,
+			UpdatedAt: row.PgUpdatedAt.Time,
 		}
 	}
 

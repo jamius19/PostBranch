@@ -255,37 +255,20 @@ func insertPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 	if pgInfo != nil {
 		log.Infof("Updating existing Postgres entry %v", pgInfo)
 		pgUpdateParams := dao.UpdatePgParams{
-			PgPath:         pgInit.PostgresPath,
-			Version:        int64(pgInit.Version),
-			StopPg:         pgInit.StopPostgres,
-			PgUser:         "postgres",
-			ConnectionType: "local",
-			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
-			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
-			SslMode:        sql.NullString{String: pgInit.SslMode, Valid: pgInit.IsHostConnection()},
-			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
-			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
-			Status:         dao.PgStarted,
-			ID:             pgInfo.ID,
+			PgPath:  pgInit.PostgresPath,
+			Version: int64(pgInit.Version),
+			Status:  dao.PgStarted,
+			ID:      pgInfo.ID,
 		}
 
 		createdPg, err = data.Fetcher.UpdatePg(ctx, pgUpdateParams)
 	} else {
 		log.Infof("Creating new Postgres entry")
-
 		pgParams := dao.CreatePgParams{
-			PgPath:         pgInit.PostgresPath,
-			Version:        int64(pgInit.Version),
-			StopPg:         pgInit.StopPostgres,
-			PgUser:         pgInit.PostgresOsUser,
-			ConnectionType: pgInit.ConnectionType,
-			Host:           sql.NullString{String: pgInit.Host, Valid: pgInit.IsHostConnection()},
-			Port:           sql.NullInt64{Int64: int64(pgInit.Port), Valid: pgInit.IsHostConnection()},
-			SslMode:        sql.NullString{String: pgInit.SslMode, Valid: pgInit.IsHostConnection()},
-			Username:       sql.NullString{String: pgInit.DbUsername, Valid: pgInit.IsHostConnection()},
-			Password:       sql.NullString{String: pgInit.Password, Valid: pgInit.IsHostConnection()},
-			Status:         dao.PgStarted,
-			RepoID:         repo.ID,
+			PgPath:  pgInit.PostgresPath,
+			Version: int64(pgInit.Version),
+			Status:  dao.PgStarted,
+			RepoID:  repo.ID,
 		}
 
 		createdPg, err = data.Fetcher.CreatePg(ctx, pgParams)
