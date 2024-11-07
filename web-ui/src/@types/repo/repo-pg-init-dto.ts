@@ -10,3 +10,7 @@ export interface RepoPgInitDto {
     dbUsername?: string;
     password?: string;
 }
+
+export interface RepoPgResponseDto extends RepoPgInitDto {
+    clusterSizeInMb: number;
+}

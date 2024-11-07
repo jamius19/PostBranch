@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/logger"
 	"os"
 )
@@ -45,4 +46,20 @@ func RemovePgPassFile() error {
 	}
 
 	return nil
+}
+
+func GetPsqlCommand(auth AuthInfo, query string) (*string, error) {
+	return cmd.Single(
+		"pg-version-check",
+		false,
+		false,
+		"sudo",
+		"-u", auth.GetPostgresOsUser(),
+		auth.GetPostgresPath()+"/bin/psql",
+		"-t",
+		"-w",
+		"-P", "format=unaligned",
+		"-w",
+		"-c", query,
+	)
 }

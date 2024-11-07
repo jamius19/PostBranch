@@ -9,6 +9,7 @@ type InitDto struct {
 	Path     string `json:"path" validate:"required,min=1,excludesall= "`
 	RepoType string `json:"repoType" validate:"oneof=block virtual,excludesall= "`
 	SizeInMb int64  `json:"sizeInMb" validate:"required_if=RepoType virtual,initCon"`
+	PgInitResponseDto
 }
 
 func InitValidation(fl validator.FieldLevel) bool {

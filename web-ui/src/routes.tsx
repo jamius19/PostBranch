@@ -1,10 +1,10 @@
 import {createBrowserRouter} from "react-router-dom";
 import RepoList from "@/route/repo/repo-list.tsx";
 import Layout from "./layout/layout.tsx";
-import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
 import Error from "./route/error/error.tsx";
 import PgSetup from "@/route/repo/setup/pg-setup.tsx";
 import Repo from "@/route/repo/[id]/repo.tsx";
+import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
 
 const router = createBrowserRouter([
     {
@@ -16,7 +16,7 @@ const router = createBrowserRouter([
                 element: <RepoList/>,
             },
             {
-                path: "/repo/setup",
+                path: "/repo/setup/storage",
                 element: <RepoSetup/>,
             },
             {
@@ -24,7 +24,7 @@ const router = createBrowserRouter([
                 element: <Repo/>,
             },
             {
-                path: "/repo/setup/:repoId/postgres",
+                path: "/repo/setup/postgres",
                 element: <PgSetup/>,
             },
             {

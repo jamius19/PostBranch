@@ -20,7 +20,7 @@ export interface RepoResponseDto {
     path: string;
     repoType: string;
     sizeInMb: number;
-    pg?: PgInfo;
+    pg: PgInfo;
     branches: Branch[];
     createdAt: Date;
     updatedAt: Date;

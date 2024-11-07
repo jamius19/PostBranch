@@ -25,30 +25,26 @@ import {
 import {ChevronRightIcon} from "@radix-ui/react-icons";
 import {generateName} from '@criblinc/docker-names'
 import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Check} from "lucide-react";
-import {getRandomInt} from "@/util/lib.ts";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
-import {Link} from "react-router-dom";
+import {ArrowRight, Check, Info} from "lucide-react";
+import {formatValue, getRandomInt} from "@/util/lib.ts";
+import React, {JSX, useCallback, useEffect, useMemo, useState} from "react";
+import {Link, Navigate, useLocation} from "react-router-dom";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
-import StorageSlider from "@/components/storage-slider.tsx";
+import StorageSlider, {MIN_VALUE} from "@/components/storage-slider.tsx";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
+import {RepoPgResponseDto} from "@/@types/repo/repo-pg-init-dto.ts";
 
 const blockSchema = z.object({
     repoType: z.literal("block"),
 });
 
-const virtualSchema = z.object({
-    repoType: z.literal("virtual"),
-    sizeInMb: z.number({message: "Size value must be in the format (550MB, 3.5GB, 1TB)"})
-        .min(256, "Minimum size value is 256 Megabytes")
-});
 
-const RepoSetup = () => {
-    // TODO: Show block storage list somewhere
-    // const {isSuccess, data} = useQuery({
-    //     queryKey: ["repo-block-storage"],
-    //     queryFn: listBlockStorages
-    // });
+interface RepoSetupState {
+    pgConfig?: RepoPgResponseDto
+}
+
+const RepoSetup = (): JSX.Element => {
+    const repoSetupState = useLocation()?.state as RepoSetupState;
 
     const reposQuery = useQuery({
         queryKey: ["repo-list"],
@@ -70,6 +66,7 @@ const RepoSetup = () => {
     const generatedName = generateName();
     const repoInitSuccess = repoInit.isSuccess;
     const repoInitPending = repoInit.isPending;
+    const repoSizeMinValue = Math.max((repoSetupState?.pgConfig?.clusterSizeInMb || 0) + 25, MIN_VALUE);
 
     const baseFormSchema = useMemo(() => z.object({
         name: z.string()
@@ -91,17 +88,24 @@ const RepoSetup = () => {
                 "Repository with the same path already exists"),
     }), [reposQuery]);
 
+    const virtualSchema = useMemo(
+        () => z.object({
+            repoType: z.literal("virtual"),
+            sizeInMb: z.number({message: "Repository Size must be in the format (550MB, 3.5GB, 1TB)"})
+                .min(repoSizeMinValue, `Minimum allowed size is ${formatValue(repoSizeMinValue)}`)
+        }), [repoSizeMinValue]);
+
     const formSchema = useMemo(
         () => z.discriminatedUnion("repoType", [virtualSchema, blockSchema]).and(baseFormSchema),
-        [baseFormSchema]
+        [baseFormSchema, virtualSchema]
     );
 
     const defaultFormValues = useMemo<RepoInitDto>(() => ({
         name: generatedName,
         repoType: "virtual",
         path: getVirtualPath(generatedName),
-        sizeInMb: 1024,
-    }), [generatedName]);
+        sizeInMb: repoSizeMinValue,
+    }), [generatedName, repoSizeMinValue]);
 
     const repoForm = useAppForm<RepoInitDto>({
         resolver: zodResolver(formSchema),
@@ -112,8 +116,8 @@ const RepoSetup = () => {
     const repoType = repoForm.watch("repoType");
 
     const onSubmit = useCallback(async (data: RepoInitDto) => {
-        await repoInit.mutateAsync(data);
-    }, [repoInit]);
+        await repoInit.mutateAsync({...data, ...repoSetupState.pgConfig!});
+    }, [repoInit, repoSetupState?.pgConfig]);
 
     const clearVirtualStorageValues = useCallback((value: RepoType) => {
         if (value === 'block') {
@@ -144,6 +148,10 @@ const RepoSetup = () => {
             setNameUpdated(true);
         }
     }, [generatedName, repoForm, reposQuery.data, reposQuery.isSuccess]);
+
+    if (!repoSetupState?.pgConfig) {
+        return <Navigate to={"/error"} state={{message: "No PostgreSQL configuration found."}}/>;
+    }
 
     if (reposQuery.isPending || !nameUpdated) {
         return <Spinner/>;
@@ -261,11 +269,24 @@ const RepoSetup = () => {
                         )}
                     />
 
-                    {repoType === 'virtual' && (
-                        <div className="flex gap-4">
+                    <div
+                        className={"flex items-center gap-2 bg-lime-200/70 text-xs text-lime-700 rounded-md px-4 py-3"}>
+                        <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
+
+                        <p>
+                            <b>Minimum required storage space to clone the database cluster
+                                is {formatValue(repoSizeMinValue)}</b>
+                        </p>
+                    </div>
+
+                    {repoType === "virtual" && (
+                        <div className="flex flex-col">
                             <StorageSlider
-                                disabled={repoInitPending || repoInitSuccess}
-                                name={"sizeInMb"}/>
+                                formProps={{
+                                    disabled: repoInitPending || repoInitSuccess,
+                                    name: "sizeInMb",
+                                }}
+                                minSizeInMb={repoSetupState.pgConfig.clusterSizeInMb}/>
                         </div>
                     )}
 
@@ -281,9 +302,9 @@ const RepoSetup = () => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Link to={`/repo/setup/${repoInit.data.data!.id}/postgres`}>
+                            <Link to={`/repo/${repoInit.data?.data!.id}`}>
                                 <Button>
-                                    Setup Postgres <ArrowRight/>
+                                    Go to Repository <ArrowRight/>
                                 </Button>
                             </Link>
                         )}

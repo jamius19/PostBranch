@@ -61,7 +61,7 @@ const Repo = () => {
 
     return (
         <div>
-            <div className={"flex mb-4 items-center gap-3 "}>
+            <div className={"flex mb-2.5 items-center gap-3 "}>
                 <h1 className={"mono"}>{repo.name}</h1>
                 <Button
                     className={"relative top-[-3px] ml-auto text-gray-400 px-2 py-2 hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-md hover:shadow-red-500/40 transition-all duration-200"}

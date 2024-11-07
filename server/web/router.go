@@ -12,9 +12,10 @@ func routes(r *chi.Mux) {
 			r.Get("/{repoId}", route.GetRepo)
 
 			r.Post("/", route.InitializeRepo)
-			r.Post("/{repoId}/postgres", route.ImportPg)
-
+			
 			r.Delete("/{repoId}", route.DeleteRepo)
 		})
+
+		r.Post("/postgres", route.ValidatePg)
 	})
 }

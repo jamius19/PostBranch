@@ -22,7 +22,7 @@ export const isInteger = (str?: string): boolean => {
     return Number.isInteger(str ? +str : undefined);
 }
 
-export const formatValue = (megabytes: number, shortUnitForm = false) => {
+export const formatValue = (megabytes: number, shortUnitForm = false): string => {
     let val: number;
     let unitSuffix: string;
 

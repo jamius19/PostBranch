@@ -6,7 +6,6 @@ import {
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
-import {Link, Navigate, useParams} from "react-router-dom";
 import {z} from "zod";
 import {RepoPgInitDto} from "@/@types/repo/repo-pg-init-dto.ts";
 import {Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage} from "@/components/ui/form";
@@ -16,12 +15,13 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/c
 import {zodResolver} from "@hookform/resolvers/zod";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
-import {importPg} from "@/service/repo-service.ts";
-import React, {useCallback} from "react";
+import {validatePg} from "@/service/repo-service.ts";
+import React, {JSX, useCallback} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Check, SquareArrowOutUpRight} from "lucide-react";
-import {isInteger} from "@/util/lib.ts";
+import {ArrowRight, Check, Info, SquareArrowOutUpRight} from "lucide-react";
+import Link from "@/components/Link.tsx";
+import {formatValue} from "@/util/lib.ts";
 
 const baseFormSchema = z.object({
     version: z.number()
@@ -88,16 +88,16 @@ const defaultValues: RepoPgInitDto = {
     password: "",
 };
 
-const PgSetup = () => {
-    const {repoId: repoIdStr} = useParams<{ repoId: string }>();
-    const repoId = parseInt(repoIdStr!);
+const PgSetup = (): JSX.Element => {
+    // const {repoId: repoIdStr} = useParams<{ repoId: string }>();
+    // const repoId = parseInt(repoIdStr!);
 
-    const pgImport = useNotifiableMutation({
+    const pgValidate = useNotifiableMutation({
         mutationKey: ["pg-import"],
-        mutationFn: importPg,
+        mutationFn: validatePg,
         messages: {
-            pending: "Starting PostgreSQL import",
-            success: "PostgreSQL import started successfully",
+            pending: "Checking PostgreSQL configuration",
+            success: "PostgreSQL configuration is valid",
         },
         invalidates: ["repo-list", "repo"],
     });
@@ -108,18 +108,17 @@ const PgSetup = () => {
     });
 
     const onSubmit = useCallback(async (repoPgInitDto: RepoPgInitDto) => {
-        console.log(repoPgInitDto);
-        await pgImport.mutateAsync({repoId, repoPgInitDto});
-    }, [pgImport, repoId]);
+        await pgValidate.mutateAsync(repoPgInitDto);
+    }, [pgValidate]);
 
     const hostConnectionSelected = pgForm.watch("connectionType") === "host";
 
-    if (!isInteger(repoIdStr)) {
-        return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
-    }
+    // if (!isInteger(repoIdStr)) {
+    //     return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
+    // }
 
-    const repoInitSuccess = pgImport.isSuccess;
-    const repoInitPending = pgImport.isPending;
+    const repoInitSuccess = pgValidate.isSuccess;
+    const repoInitPending = pgValidate.isPending;
 
     return (
         <div>
@@ -127,13 +126,13 @@ const PgSetup = () => {
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
-                            Configure Storage
+                            <BreadcrumbPage>Configure PostgreSQL</BreadcrumbPage>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            <BreadcrumbPage>Import Data</BreadcrumbPage>
+                            Configure Storage
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
@@ -437,6 +436,18 @@ const PgSetup = () => {
                         </>
                     )}
 
+                    {repoInitSuccess && (
+                        <div
+                            className={"flex items-center gap-2 bg-lime-200/70 text-xs text-lime-700 rounded-md px-4 py-3"}>
+                            <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
+
+                            <p>
+                                <b>All done! The database cluster size
+                                    is {formatValue(pgValidate.data.data!.clusterSizeInMb)}</b>.
+                            </p>
+                        </div>
+                    )}
+
                     <div className={"flex gap-4"}>
                         <Button
                             type="submit"
@@ -449,16 +460,15 @@ const PgSetup = () => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Link to={`/repo/${repoId}`}>
+                            <Link to={"/repo/setup/storage"} state={{pgConfig: pgValidate.data.data!}}>
                                 <Button>
-                                    Go to Repo <ArrowRight/>
+                                    Storage Configuration <ArrowRight/>
                                 </Button>
                             </Link>
                         )}
                     </div>
                 </form>
             </Form>
-
         </div>
     );
 };

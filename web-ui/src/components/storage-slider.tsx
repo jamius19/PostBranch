@@ -4,7 +4,7 @@ import {Input} from "@/components/ui/input";
 import {useController, UseControllerProps} from "react-hook-form";
 import {formatValue} from "@/util/lib.ts";
 
-const MIN_VALUE = 256; // 256 MB
+export const MIN_VALUE = 300;
 
 const STEPS = [
     256, 512, 768, 1024, 1536, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, // Up to 10 GB
@@ -25,8 +25,13 @@ interface StorageFormValues {
     sizeInMb?: number;
 }
 
-const StorageSlider = (props: UseControllerProps<StorageFormValues>) => {
-    const {field, fieldState, formState} = useController<StorageFormValues>(props);
+interface StorageSliderProps {
+    formProps: UseControllerProps<StorageFormValues>;
+    minSizeInMb?: number;
+}
+
+const StorageSlider = (props: StorageSliderProps) => {
+    const {field, fieldState, formState} = useController<StorageFormValues>(props.formProps);
 
     const [sizeInMb, setSizeInMb] = useState(field.value || MIN_VALUE);
     const [inputValue, setInputValue] = useState(formatValue(field.value || MIN_VALUE, true));

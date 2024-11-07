@@ -10,6 +10,7 @@ import (
 	repoDto "github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/repo"
+	"github.com/jamius19/postbranch/service/repo/pg"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/util/validation"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -59,14 +60,40 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoResponse, err := repo.InitializeRepo(r.Context(), &repoInit)
+	createdRepo, pool, err := repo.InitializeRepo(r.Context(), &repoInit)
+
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
+	createdPg, err := pg.Import(r.Context(), &repoInit, createdRepo, pool, nil)
+	if err != nil {
+		util.WriteError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	pgResponse := repoDto.Pg{
+		PgId:    createdPg.ID,
+		Version: createdPg.Version,
+		Status:  createdPg.Status,
+		Output:  util.GetNullableString(&createdPg.Output),
+	}
+
+	repoResponse := repoDto.Response{
+		Id:        createdRepo.ID,
+		Name:      createdRepo.Name,
+		Path:      pool.Path,
+		RepoType:  pool.PoolType,
+		SizeInMb:  pool.SizeInMb,
+		Pg:        pgResponse,
+		PoolID:    pool.ID,
+		CreatedAt: createdRepo.CreatedAt,
+		UpdatedAt: createdRepo.UpdatedAt,
+	}
+
 	response := dto.Response[repoDto.Response]{
-		Data:  repoResponse,
+		Data:  &repoResponse,
 		Error: nil,
 	}
 
@@ -84,7 +111,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 
 	reposResponse := []repoDto.Response{}
 	for i := range repos {
-		var pgInfo *repoDto.Pg = nil
+		var pgInfo repoDto.Pg
 		branchesInfo := []repoDto.Branch{}
 
 		repoData, pool, pg := conversion.SplitRepoRow((*dao.GetRepoRow)(&repos[i]))
@@ -102,8 +129,8 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			pgInfo = &repoDto.Pg{
-				PgID:    pg.ID,
+			pgInfo = repoDto.Pg{
+				PgId:    pg.ID,
 				Version: pg.Version,
 				Status:  pg.Status,
 				Output:  util.GetNullableString(&pg.Output),
@@ -132,7 +159,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		}
 
 		repoResponse := repoDto.Response{
-			ID:        repoData.ID,
+			Id:        repoData.ID,
 			Name:      repoData.Name,
 			Path:      pool.Path,
 			SizeInMb:  pool.SizeInMb,
@@ -161,7 +188,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repo ID should be a number"),
+			responseerror.From("Repo Id should be a number"),
 			http.StatusBadRequest,
 		)
 
@@ -170,18 +197,18 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 
 	repoRow, err := data.Fetcher.GetRepo(r.Context(), repoId)
 	if err != nil {
-		log.Error("Failed to load repo, Invalid Repository ID: %d", repoId)
+		log.Error("Failed to load repo, Invalid Repository Id: %d", repoId)
 
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Invalid Repository ID"),
+			responseerror.From("Invalid Repository Id"),
 			http.StatusNotFound,
 		)
 		return
 	}
 
-	var pgInfo *repoDto.Pg = nil
+	var pgInfo repoDto.Pg
 	branchesInfo := []repoDto.Branch{}
 
 	repoData, pool, pg := conversion.SplitRepoRow(&repoRow)
@@ -198,8 +225,8 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		pgInfo = &repoDto.Pg{
-			PgID:    pg.ID,
+		pgInfo = repoDto.Pg{
+			PgId:    pg.ID,
 			Version: pg.Version,
 			Status:  pg.Status,
 			Output:  util.GetNullableString(&pg.Output),
@@ -228,7 +255,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repoResponse := repoDto.Response{
-		ID:        repoData.ID,
+		Id:        repoData.ID,
 		Name:      repoData.Name,
 		Path:      pool.Path,
 		SizeInMb:  pool.SizeInMb,
@@ -253,7 +280,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repo ID should be a number"),
+			responseerror.From("Repo Id should be a number"),
 			http.StatusBadRequest,
 		)
 
@@ -262,12 +289,12 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 
 	repoRow, err := data.Fetcher.GetRepo(r.Context(), repoId)
 	if err != nil {
-		log.Error("Failed to load repo, Invalid Repository ID: %d", repoId)
+		log.Error("Failed to load repo, Invalid Repository Id: %d", repoId)
 
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Invalid Repository ID"),
+			responseerror.From("Invalid Repository Id"),
 			http.StatusNotFound,
 		)
 		return

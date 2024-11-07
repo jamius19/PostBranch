@@ -37,7 +37,7 @@ const RepoList = () => {
     return (
         <>
             <div className={"mb-4 flex justify-end"}>
-                <Link to={"/repo/setup"}>
+                <Link to={"/repo/setup/postgres"}>
                     <Button size={"sm"} variant={"outline"}>
                         <PackagePlus
                             size={13}
@@ -59,7 +59,7 @@ const RepoList = () => {
             )}
 
             {!!repos && !repos.length && (
-                <div className={"mt-40 flex flex-col items-center gap-4"}>
+                <div className={"mt-40 flex flex-col items-center"}>
                     <img src={"/images/purrcy_confused.png"} width={"350px"} alt={"Purrcy is confused"}/>
                     <p className={"text-center"}>No repositories found. Create one?</p>
                 </div>

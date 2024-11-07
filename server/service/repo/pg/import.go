@@ -24,7 +24,7 @@ import (
 
 var log = logger.Logger
 
-func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo *dao.Pg, pool *dao.ZfsPool) error {
+func Validate(pgInit *repo.PgInitDto) error {
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
 	if _, err := os.Stat(pgBaseBackupPath); errors.Is(err, fs.ErrNotExist) {
 		return responseerror.From("Invalid Postgres path, please check the path")
@@ -50,21 +50,76 @@ func Import(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, pgInfo 
 		return err
 	}
 
+	return nil
+}
+
+func Import(ctx context.Context, repoinit *repo.InitDto, repo *dao.Repo, pool *dao.ZfsPool, pgInfo *dao.Pg) (*dao.Pg, error) {
+	pgInit := &repoinit.PgInitDto
+
+	if err := Validate(pgInit); err != nil {
+		return nil, err
+	}
+
+	if repoinit.SizeInMb < max(256, repoinit.ClusterSizeInMb) {
+		log.Errorf("Client requested size of %d MB is too small. Cluster size should be at least %d MB",
+			repoinit.SizeInMb, max(256, repoinit.ClusterSizeInMb))
+
+		return nil, responseerror.From(
+			fmt.Sprintf("Cluster size should be at least %d MB", max(256, repoinit.ClusterSizeInMb)),
+		)
+	}
+
 	// Get the main dataset for importing Postgres data
 	dataset, err := data.Fetcher.GetDatasetByName(ctx, pool.Name+"/main")
 	if err != nil {
 		log.Errorf("Dataset not found for repo: %v and pool: %v", repo, pool)
-		return responseerror.From("Associated Dataset not found")
+		return nil, responseerror.From("Associated Dataset not found")
 	}
 
 	createdPg, err := insertPgEntry(ctx, pgInit, repo, pgInfo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	go copyPostgresData(pgInit, repo, pool, &dataset, &createdPg)
 
-	return nil
+	return &createdPg, nil
+}
+
+func GetClusterSize(pgInit *repo.PgInitDto) (int64, error) {
+	versionQuery := "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
+	var sizeInMb int64
+
+	if pgInit.IsHostConnection() {
+		_, rows, cleanup, err := dao.RunQuery(pgInit, versionQuery)
+		if err != nil {
+			return -1, err
+		}
+		defer cleanup()
+
+		for rows.Next() {
+			err := rows.Scan(&sizeInMb)
+			if err != nil {
+				log.Errorf("Failed to scan: %v", err)
+				return -1, responseerror.From("Failed to query Postgres Cluster size")
+			}
+		}
+	} else {
+		output, err := pg.GetPsqlCommand(pgInit, versionQuery)
+
+		if err != nil || util.TrimmedString(output) == cmd.EmptyOutput {
+			log.Errorf("Failed to query Postgres Cluster size, output: %v error: %v", output, err)
+			return -1, responseerror.From("Failed to query Postgres Cluster size")
+		}
+
+		sizeInMb, err = strconv.ParseInt(util.TrimmedString(output), 10, 64)
+		if err != nil {
+			log.Errorf("Failed to convert size to int: %v", err)
+			return -1, responseerror.From("Failed to query Postgres Cluster size")
+		}
+	}
+
+	return sizeInMb, nil
 }
 
 func checkOsUser(username string) error {
@@ -96,19 +151,7 @@ func checkPgVersion(pgInit *repo.PgInitDto) error {
 			}
 		}
 	} else {
-		output, err := cmd.Single(
-			"pg-version-check",
-			false,
-			false,
-			"sudo",
-			"-u", pgInit.GetPostgresOsUser(),
-			pgInit.PostgresPath+"/bin/psql",
-			"-t",
-			"-w",
-			"-P", "format=unaligned",
-			"-w",
-			"-c", versionQuery,
-		)
+		output, err := pg.GetPsqlCommand(pgInit, versionQuery)
 		version = util.TrimmedString(output)
 
 		if err != nil || version == cmd.EmptyOutput {
@@ -145,20 +188,7 @@ func checkPgSuperuser(pgInit *repo.PgInitDto) error {
 			}
 		}
 	} else {
-		output, err := cmd.Single(
-			"pg-superuser-check",
-			false,
-			true,
-			"sudo",
-			"-u", pgInit.GetPostgresOsUser(),
-			pgInit.PostgresPath+"/bin/psql",
-			"-t",
-			"-w",
-			"-P", "format=unaligned",
-			"-w",
-			"-c", superuserQuery,
-		)
-
+		output, err := pg.GetPsqlCommand(pgInit, superuserQuery)
 		queryResult = util.TrimmedString(output)
 
 		if err != nil {
@@ -205,19 +235,7 @@ func checkPgReplication(pgInit *repo.PgInitDto) error {
 			}
 		}
 	} else {
-		output, err := cmd.Single(
-			"pg-replication-check",
-			false,
-			true,
-			"sudo",
-			"-u", pgInit.GetPostgresOsUser(),
-			pgInit.PostgresPath+"/bin/psql",
-			"-t",
-			"-w",
-			"-P", "format=unaligned",
-			"-w",
-			"-c", fmt.Sprintf(dao.PgLocalReplicationCheckQuery, pgInit.GetPostgresOsUser()),
-		)
+		output, err := pg.GetPsqlCommand(pgInit, fmt.Sprintf(dao.PgLocalReplicationCheckQuery, pgInit.GetPostgresOsUser()))
 
 		queryResult = util.TrimmedString(output)
 
