@@ -3,7 +3,6 @@ package zfs
 import (
 	"fmt"
 	"github.com/jamius19/postbranch/util"
-	"github.com/jamius19/postbranch/web/responseerror"
 	"golang.org/x/sys/unix"
 	"os"
 	"path/filepath"
@@ -28,8 +27,8 @@ func findFreeLoopNo() (int, error) {
 	return int(loopNo), nil
 }
 
-func CreateDirectories(path string) error {
-	err := os.MkdirAll(path, 0755) // 0755 sets permissions to rwxr-xr-x
+func CreateDirectories(path string, perm os.FileMode) error {
+	err := os.MkdirAll(path, perm)
 	if err != nil {
 		return fmt.Errorf("failed to create directories: %w", err)
 	}
@@ -41,10 +40,9 @@ func CreateSparseFile(imgPath string, sizeInMb int64) error {
 	_, path := util.SplitPath(imgPath)
 	log.Infof("Creating virtual disk file at %s", imgPath)
 
-	err := CreateDirectories(path)
+	err := CreateDirectories(path, 0600)
 	if err != nil {
-		log.Errorf("Failed to create directories for the sparse file. Error: %s", err)
-		return responseerror.From("Failed to create directories for the sparse file")
+		return fmt.Errorf("failed to create directories for the sparse file. Error: %s", err)
 	}
 
 	// Open or create the file
@@ -58,6 +56,10 @@ func CreateSparseFile(imgPath string, sizeInMb int64) error {
 
 	if err := file.Truncate(sizeInBytes); err != nil {
 		return fmt.Errorf("failed to set file size: %w", err)
+	}
+
+	if err := os.Chmod(imgPath, 0600); err != nil {
+		return fmt.Errorf("failed to set file permissions: %w", err)
 	}
 
 	log.Infof("Virtual disk file successfully created at %s with size %d MB", imgPath, sizeInMb)

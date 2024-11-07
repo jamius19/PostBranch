@@ -68,6 +68,7 @@ func Single(key string, skipLog bool, sensitive bool, name string, args ...strin
 	return &output, nil
 }
 
+// Multi should be avoided as much as possible. Try to use go apis for the same.
 func Multi(cmds *orderedmap.OrderedMap[string, Command]) (*orderedmap.OrderedMap[string, CommandOutput], error) {
 	LogCmds(cmds)
 

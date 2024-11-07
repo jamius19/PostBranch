@@ -5,19 +5,20 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/elliotchance/orderedmap/v2"
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
 	"github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/service/pg"
+	"github.com/jamius19/postbranch/service/repo/zfs"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
 	_ "github.com/lib/pq"
 	"io/fs"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
 )
 
@@ -317,29 +318,42 @@ func copyPostgresData(
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
 	mainDatasetPath := pool.MountPath + "/main/data"
 
-	cmds := orderedmap.NewOrderedMap[string, cmd.Command]()
-	cmds.Set(
-		"clean-data-directory",
-		cmd.Get("rm", "-rf", mainDatasetPath),
-	)
+	if err := os.RemoveAll(mainDatasetPath); err != nil {
+		log.Errorf("Failed to cleanup main dataset directory: %v", err)
+		return
+	}
 
-	cmds.Set(
-		"create-data-directory",
-		cmd.Get("mkdir", mainDatasetPath),
-	)
+	if err := zfs.CreateDirectories(mainDatasetPath, 0700); err != nil {
+		log.Errorf("Failed to create main dataset directory: %v", err)
+		return
+	}
 
-	cmds.Set(
-		"change-data-directory-permissions",
-		cmd.Get(
-			"chown", "-R",
-			fmt.Sprintf("%s:%s", pgInit.PostgresOsUser, pgInit.PostgresOsUser),
-			mainDatasetPath,
-		),
-	)
+	osUser, err := user.Lookup(pgInit.PostgresOsUser)
+	if err != nil {
+		log.Errorf("Failed to lookup postgres user: %s, error: %v", pgInit.PostgresOsUser, err)
+		return
+	}
 
-	var backupCmd cmd.Command
+	uid, _ := strconv.Atoi(osUser.Uid)
+	gid, _ := strconv.Atoi(osUser.Gid)
+
+	if err := os.Chown(mainDatasetPath, uid, gid); err != nil {
+		log.Errorf("Failed to change ownership of main dataset directory: %v", err)
+		return
+	}
+
+	var output *string
+	var cmderr error
+
+	if err := pg.CreatePgPassFile(pgInit); err != nil {
+		return
+	}
+
 	if pgInit.IsHostConnection() {
-		backupCmd = cmd.Get(
+		output, cmderr = cmd.Single(
+			"pg-base-backup-host",
+			false,
+			false,
 			pgBaseBackupPath,
 			"-w",
 			"-U", pgInit.GetDbUsername(),
@@ -348,7 +362,10 @@ func copyPostgresData(
 			"-D", mainDatasetPath,
 		)
 	} else {
-		backupCmd = cmd.Get(
+		output, cmderr = cmd.Single(
+			"pg-base-backup-local",
+			false,
+			false,
 			"sudo",
 			"-u", pgInit.GetPostgresOsUser(),
 			pgBaseBackupPath,
@@ -357,23 +374,14 @@ func copyPostgresData(
 		)
 	}
 
-	cmds.Set("pg-basebackup", backupCmd)
-
-	err := pg.CreatePgPassFile(pgInit)
-	if err != nil {
-		return
-	}
-
-	output, err := cmd.Multi(cmds)
 	_ = pg.RemovePgPassFile()
 
-	if err != nil {
-		errStr := cmd.GetError(output)
-		log.Errorf("Failed to copy pgInstance. output: %s data: %v", errStr, err)
+	if cmderr != nil {
+		log.Errorf("Failed to copy pg instance. output: %s data: %v", util.SafeStringVal(output), cmderr)
 
 		updatePgParams := dao.UpdatePgStatusParams{
 			Status: dao.PgFailed,
-			Output: sql.NullString{String: errStr, Valid: true},
+			Output: sql.NullString{String: util.SafeStringVal(output), Valid: true},
 			ID:     pgInstance.ID,
 		}
 
@@ -389,7 +397,7 @@ func copyPostgresData(
 
 	updatePgParams := dao.UpdatePgStatusParams{
 		Status: dao.PgCompleted,
-		Output: sql.NullString{String: cmd.GetError(output), Valid: true},
+		Output: sql.NullString{String: util.SafeStringVal(output), Valid: true},
 		ID:     pgInstance.ID,
 	}
 
