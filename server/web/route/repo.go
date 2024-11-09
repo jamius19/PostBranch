@@ -9,8 +9,8 @@ import (
 	"github.com/jamius19/postbranch/data/dto"
 	repoDto "github.com/jamius19/postbranch/data/dto/repo"
 	"github.com/jamius19/postbranch/logger"
+	"github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/service/repo"
-	"github.com/jamius19/postbranch/service/repo/pg"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/util/validation"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -33,7 +33,7 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sameRepoCount, err := data.Fetcher.CountRepoByNameOrPath(r.Context(), dao.CountRepoByNameOrPathParams{
+	sameRepoCount, err := data.Db.CountRepoByNameOrPath(r.Context(), dao.CountRepoByNameOrPathParams{
 		Name: repoInit.Name,
 		Path: repoInit.Path,
 	})
@@ -101,7 +101,7 @@ func InitializeRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func ListRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := data.Fetcher.ListRepo(r.Context())
+	repos, err := data.Db.ListRepo(r.Context())
 
 	if err != nil {
 		log.Error(err)
@@ -117,7 +117,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		repoData, pool, pg := conversion.SplitRepoRow((*dao.GetRepoRow)(&repos[i]))
 
 		if pg != nil {
-			pg, err := data.Fetcher.GetPg(r.Context(), pg.ID)
+			pg, err := data.Db.GetPg(r.Context(), pg.ID)
 			if err != nil {
 				log.Errorf("Failed to load pg info for repo %v", repoData)
 				util.WriteError(
@@ -136,7 +136,7 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 				Output:  util.GetNullableString(&pg.Output),
 			}
 
-			branches, err := data.Fetcher.ListBranchesByRepoId(r.Context(), repoData.ID)
+			branches, err := data.Db.ListBranchesByRepoId(r.Context(), repoData.ID)
 
 			if err != nil {
 				log.Error("Failed to load branches for repo %v", repoData)
@@ -195,7 +195,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoRow, err := data.Fetcher.GetRepo(r.Context(), repoId)
+	repoRow, err := data.Db.GetRepo(r.Context(), repoId)
 	if err != nil {
 		log.Error("Failed to load repo, Invalid Repository Id: %d", repoId)
 
@@ -213,7 +213,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 
 	repoData, pool, pg := conversion.SplitRepoRow(&repoRow)
 	if pg != nil {
-		pg, err := data.Fetcher.GetPg(r.Context(), pg.ID)
+		pg, err := data.Db.GetPg(r.Context(), pg.ID)
 		if err != nil {
 			log.Errorf("Failed to load pg info for repo %v", repoData)
 			util.WriteError(
@@ -232,7 +232,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 			Output:  util.GetNullableString(&pg.Output),
 		}
 
-		branches, err := data.Fetcher.ListBranchesByRepoId(r.Context(), repoData.ID)
+		branches, err := data.Db.ListBranchesByRepoId(r.Context(), repoData.ID)
 
 		if err != nil {
 			log.Error("Failed to load branches for repo %v", repoData)
@@ -287,7 +287,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoRow, err := data.Fetcher.GetRepo(r.Context(), repoId)
+	repoRow, err := data.Db.GetRepo(r.Context(), repoId)
 	if err != nil {
 		log.Error("Failed to load repo, Invalid Repository Id: %d", repoId)
 

@@ -9,8 +9,6 @@ import (
 	"github.com/jamius19/postbranch/data"
 	"github.com/jamius19/postbranch/data/dao"
 	"github.com/jamius19/postbranch/data/dto/repo"
-	"github.com/jamius19/postbranch/logger"
-	"github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/service/repo/zfs"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
@@ -22,7 +20,7 @@ import (
 	"strings"
 )
 
-var log = logger.Logger
+const errMsg = "Can't connect to PostgreSQL. Is it running and is the provided configuration correct?"
 
 func Validate(pgInit *repo.PgInitDto) error {
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
@@ -70,7 +68,7 @@ func Import(ctx context.Context, repoinit *repo.InitDto, repo *dao.Repo, pool *d
 	}
 
 	// Get the main dataset for importing Postgres data
-	dataset, err := data.Fetcher.GetDatasetByName(ctx, pool.Name+"/main")
+	dataset, err := data.Db.GetDatasetByName(ctx, pool.Name+"/main")
 	if err != nil {
 		log.Errorf("Dataset not found for repo: %v and pool: %v", repo, pool)
 		return nil, responseerror.From("Associated Dataset not found")
@@ -87,36 +85,18 @@ func Import(ctx context.Context, repoinit *repo.InitDto, repo *dao.Repo, pool *d
 }
 
 func GetClusterSize(pgInit *repo.PgInitDto) (int64, error) {
-	versionQuery := "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
 	var sizeInMb int64
 
-	if pgInit.IsHostConnection() {
-		_, rows, cleanup, err := dao.RunQuery(pgInit, versionQuery)
-		if err != nil {
-			return -1, err
-		}
-		defer cleanup()
+	output, err := Single(pgInit, ClusterSizeQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres Cluster size: %v", err)
+		return 0, responseerror.From(errMsg)
+	}
 
-		for rows.Next() {
-			err := rows.Scan(&sizeInMb)
-			if err != nil {
-				log.Errorf("Failed to scan: %v", err)
-				return -1, responseerror.From("Failed to query Postgres Cluster size")
-			}
-		}
-	} else {
-		output, err := pg.GetPsqlCommand(pgInit, versionQuery)
-
-		if err != nil || util.TrimmedString(output) == cmd.EmptyOutput {
-			log.Errorf("Failed to query Postgres Cluster size, output: %v error: %v", output, err)
-			return -1, responseerror.From("Failed to query Postgres Cluster size")
-		}
-
-		sizeInMb, err = strconv.ParseInt(util.TrimmedString(output), 10, 64)
-		if err != nil {
-			log.Errorf("Failed to convert size to int: %v", err)
-			return -1, responseerror.From("Failed to query Postgres Cluster size")
-		}
+	sizeInMb, err = strconv.ParseInt(output, 10, 64)
+	if err != nil {
+		log.Errorf("Failed to convert size to int: %v", err)
+		return -1, responseerror.From(errMsg)
 	}
 
 	return sizeInMb, nil
@@ -133,34 +113,13 @@ func checkOsUser(username string) error {
 }
 
 func checkPgVersion(pgInit *repo.PgInitDto) error {
-	versionQuery := "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
-	var version string
-
-	if pgInit.IsHostConnection() {
-		_, rows, cleanup, err := dao.RunQuery(pgInit, versionQuery)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-
-		for rows.Next() {
-			err := rows.Scan(&version)
-			if err != nil {
-				log.Errorf("Failed to scan: %v", err)
-				return responseerror.From("Failed to query Postgres version")
-			}
-		}
-	} else {
-		output, err := pg.GetPsqlCommand(pgInit, versionQuery)
-		version = util.TrimmedString(output)
-
-		if err != nil || version == cmd.EmptyOutput {
-			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
-			return responseerror.From("Can't connect to PostgreSQL. Is it running and the configuration is correct?")
-		}
+	output, err := Single(pgInit, VersionQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres version: %v", err)
+		return responseerror.From(errMsg)
 	}
 
-	if !strings.Contains(version, util.StringVal(pgInit.Version)) {
+	if !strings.Contains(output, util.StringVal(pgInit.Version)) {
 		log.Error("Postgres version mismatch")
 		return responseerror.From("Postgres version mismatch")
 	}
@@ -169,42 +128,13 @@ func checkPgVersion(pgInit *repo.PgInitDto) error {
 }
 
 func checkPgSuperuser(pgInit *repo.PgInitDto) error {
-	superuserQuery := dao.PgSuperUserCheckQuery
-
-	var queryResult string
-
-	if pgInit.IsHostConnection() {
-		_, rows, cleanup, err := dao.RunQuery(pgInit, superuserQuery)
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-
-		for rows.Next() {
-			err := rows.Scan(&queryResult)
-			if err != nil {
-				log.Errorf("Failed to scan: %v", err)
-				return responseerror.From("Failed to query Postgres Superuser permission")
-			}
-		}
-	} else {
-		output, err := pg.GetPsqlCommand(pgInit, superuserQuery)
-		queryResult = util.TrimmedString(output)
-
-		if err != nil {
-			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
-			return responseerror.From("Failed to query Postgres Superuser permission")
-		}
-	}
-
-	if queryResult == cmd.EmptyOutput {
-		errMsg := "Can't connect to PostgreSQL. Is it running and the configuration is correct?"
-
-		log.Error(errMsg)
+	output, err := Single(pgInit, SuperUserCheckQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres superuser: %v", err)
 		return responseerror.From(errMsg)
 	}
 
-	if !strings.Contains(queryResult, "t") {
+	if !strings.Contains(output, "t") {
 		errMsg := fmt.Sprintf(
 			"%s is not a superuser. Please connect using a superuser credentials.",
 			pgInit.GetPgUser(),
@@ -218,41 +148,21 @@ func checkPgSuperuser(pgInit *repo.PgInitDto) error {
 }
 
 func checkPgReplication(pgInit *repo.PgInitDto) error {
-	var queryResult string
+	var replicationQuery string
 
 	if pgInit.IsHostConnection() {
-		_, rows, cleanup, err := dao.RunQuery(pgInit, fmt.Sprintf(dao.PgHostReplicationCheckQuery, pgInit.GetDbUsername()))
-		if err != nil {
-			return err
-		}
-		defer cleanup()
-
-		for rows.Next() {
-			err := rows.Scan(&queryResult)
-			if err != nil {
-				log.Errorf("Failed to scan: %v", err)
-				return responseerror.From("Failed to query Postgres replication permission")
-			}
-		}
+		replicationQuery = fmt.Sprintf(HostReplicationCheckQuery, pgInit.GetDbUsername())
 	} else {
-		output, err := pg.GetPsqlCommand(pgInit, fmt.Sprintf(dao.PgLocalReplicationCheckQuery, pgInit.GetPostgresOsUser()))
-
-		queryResult = util.TrimmedString(output)
-
-		if err != nil {
-			log.Errorf("Failed to query Postgres version, output: %v error: %v", output, err)
-			return responseerror.From("Can't connect to PostgreSQL. Is it running and the configuration is correct?")
-		}
+		replicationQuery = fmt.Sprintf(LocalReplicationCheckQuery, pgInit.GetPostgresOsUser())
 	}
 
-	if queryResult == cmd.EmptyOutput {
-		errMsg := "Can't connect to PostgreSQL. Is it running and the configuration is correct?"
-
-		log.Error(errMsg)
+	output, err := Single(pgInit, replicationQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres replication: %v", err)
 		return responseerror.From(errMsg)
 	}
 
-	if "REPLICATION_ALLOWED" != strings.TrimSpace(queryResult) {
+	if "REPLICATION_NOT_ALLOWED" == output {
 		errMsg := fmt.Sprintf(
 			"Replication is not enabled for user %s on %s connection.",
 			pgInit.GetPgUser(),
@@ -275,21 +185,21 @@ func insertPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 		pgUpdateParams := dao.UpdatePgParams{
 			PgPath:  pgInit.PostgresPath,
 			Version: int64(pgInit.Version),
-			Status:  dao.PgStarted,
+			Status:  Started,
 			ID:      pgInfo.ID,
 		}
 
-		createdPg, err = data.Fetcher.UpdatePg(ctx, pgUpdateParams)
+		createdPg, err = data.Db.UpdatePg(ctx, pgUpdateParams)
 	} else {
 		log.Infof("Creating new Postgres entry")
 		pgParams := dao.CreatePgParams{
 			PgPath:  pgInit.PostgresPath,
 			Version: int64(pgInit.Version),
-			Status:  dao.PgStarted,
+			Status:  Started,
 			RepoID:  repo.ID,
 		}
 
-		createdPg, err = data.Fetcher.CreatePg(ctx, pgParams)
+		createdPg, err = data.Db.CreatePg(ctx, pgParams)
 	}
 
 	if err != nil {
@@ -299,6 +209,26 @@ func insertPgEntry(ctx context.Context, pgInit *repo.PgInitDto, repo *dao.Repo, 
 
 	log.Infof("Created postgres entry: %v", createdPg)
 	return createdPg, nil
+}
+
+func getConfFiles(pgInit *repo.PgInitDto) ([]string, error) {
+	output, err := Single(pgInit, ConfigFilePathsQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres config files, output: %v error: %v", output, err)
+		return nil, fmt.Errorf("failed to query Postgres config files. error: %v", err)
+	}
+
+	return strings.Split(output, ";"), nil
+}
+
+func getHbaFiles(pgInit *repo.PgInitDto) ([]string, error) {
+	output, err := Single(pgInit, HbaFilePathsQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres hba files, output: %v error: %v", output, err)
+		return nil, fmt.Errorf("failed to query Postgres hba files. error: %v", err)
+	}
+
+	return strings.Split(output, ";"), nil
 }
 
 func copyPostgresData(
@@ -319,6 +249,7 @@ func copyPostgresData(
 	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
 	mainDatasetPath := pool.MountPath + "/main/data"
 
+	// Cleaning the new dataset directory
 	if err := os.RemoveAll(mainDatasetPath); err != nil {
 		log.Errorf("Failed to cleanup main dataset directory: %v", err)
 		return
@@ -329,24 +260,16 @@ func copyPostgresData(
 		return
 	}
 
-	osUser, err := user.Lookup(pgInit.PostgresOsUser)
-	if err != nil {
-		log.Errorf("Failed to lookup postgres user: %s, error: %v", pgInit.PostgresOsUser, err)
-		return
-	}
-
-	uid, _ := strconv.Atoi(osUser.Uid)
-	gid, _ := strconv.Atoi(osUser.Gid)
-
-	if err := os.Chown(mainDatasetPath, uid, gid); err != nil {
+	if err := zfs.SetPermissions(mainDatasetPath, pgInit.PostgresOsUser); err != nil {
 		log.Errorf("Failed to change ownership of main dataset directory: %v", err)
 		return
 	}
 
+	// Backing up postgres
 	var output *string
 	var cmderr error
 
-	if err := pg.CreatePgPassFile(pgInit); err != nil {
+	if err := CreatePgPassFile(pgInit); err != nil {
 		return
 	}
 
@@ -375,18 +298,18 @@ func copyPostgresData(
 		)
 	}
 
-	_ = pg.RemovePgPassFile()
+	_ = RemovePgPassFile()
 
 	if cmderr != nil {
 		log.Errorf("Failed to copy pg instance. output: %s data: %v", util.SafeStringVal(output), cmderr)
 
 		updatePgParams := dao.UpdatePgStatusParams{
-			Status: dao.PgFailed,
+			Status: Failed,
 			Output: sql.NullString{String: util.SafeStringVal(output), Valid: true},
 			ID:     pgInstance.ID,
 		}
 
-		updatedPg, err := data.Fetcher.UpdatePgStatus(ctx, updatePgParams)
+		updatedPg, err := data.Db.UpdatePgStatus(ctx, updatePgParams)
 		if err != nil {
 			log.Errorf("Failed to update import status of pgInstance: %v", err)
 		}
@@ -396,13 +319,14 @@ func copyPostgresData(
 		return
 	}
 
+	// Updating DB
 	updatePgParams := dao.UpdatePgStatusParams{
-		Status: dao.PgCompleted,
+		Status: Completed,
 		Output: sql.NullString{String: util.SafeStringVal(output), Valid: true},
 		ID:     pgInstance.ID,
 	}
 
-	updatedPg, err := data.Fetcher.UpdatePgStatus(ctx, updatePgParams)
+	updatedPg, err := data.Db.UpdatePgStatus(ctx, updatePgParams)
 	if err != nil {
 		log.Errorf("Failed to update import status of pgInstance: %v", err)
 	}
@@ -414,7 +338,7 @@ func copyPostgresData(
 		DatasetID: dataset.ID,
 	}
 
-	_, err = data.Fetcher.CreateBranch(ctx, branchParams)
+	_, err = data.Db.CreateBranch(ctx, branchParams)
 	if err != nil {
 		log.Errorf("Failed to create main branch: %v", err)
 		return

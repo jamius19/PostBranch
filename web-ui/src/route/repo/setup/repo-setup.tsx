@@ -88,12 +88,11 @@ const RepoSetup = (): JSX.Element => {
                 "Repository with the same path already exists"),
     }), [reposQuery]);
 
-    const virtualSchema = useMemo(
-        () => z.object({
-            repoType: z.literal("virtual"),
-            sizeInMb: z.number({message: "Repository Size must be in the format (550MB, 3.5GB, 1TB)"})
-                .min(repoSizeMinValue, `Minimum allowed size is ${formatValue(repoSizeMinValue)}`)
-        }), [repoSizeMinValue]);
+    const virtualSchema = useMemo(() => z.object({
+        repoType: z.literal("virtual"),
+        sizeInMb: z.number({message: "Repository Size must be in the format (550MB, 3.5GB, 1TB)"})
+            .min(repoSizeMinValue, `Minimum allowed size is ${formatValue(repoSizeMinValue)}`)
+    }), [repoSizeMinValue]);
 
     const formSchema = useMemo(
         () => z.discriminatedUnion("repoType", [virtualSchema, blockSchema]).and(baseFormSchema),

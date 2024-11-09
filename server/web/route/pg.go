@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/jamius19/postbranch/data/dto"
 	"github.com/jamius19/postbranch/data/dto/repo"
-	"github.com/jamius19/postbranch/service/repo/pg"
+	"github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/util/validation"
 	"github.com/jamius19/postbranch/web/responseerror"

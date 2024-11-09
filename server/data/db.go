@@ -10,25 +10,22 @@ import (
 const dbPath = "/var/lib/postbranch/postbranch.db"
 
 var log = logger.Logger
-var Db *sql.DB
-var Fetcher *dao.Queries
+var Db *dao.Queries
 
 func Initialize() *sql.DB {
-	var err error
-
-	Db, err = sql.Open("sqlite3", "/home/jamius19/.postbranch/main.db")
+	db, err := sql.Open("sqlite3", "/home/jamius19/.postbranch/main.db")
 	if err != nil {
 		logger.Logger.Fatal(err)
 	}
 
-	_, err = Db.Exec("PRAGMA foreign_keys=ON")
+	_, err = db.Exec("PRAGMA foreign_keys=ON")
 	if err != nil {
 		log.Errorf("Can't set PRAGMA foreign_keys: %s", err)
 		return nil
 	}
 
-	Fetcher = dao.New(Db)
+	Db = dao.New(db)
 
 	log.Info("Initialized database")
-	return Db
+	return db
 }

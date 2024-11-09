@@ -5,7 +5,9 @@ import (
 	"github.com/jamius19/postbranch/util"
 	"golang.org/x/sys/unix"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +33,22 @@ func CreateDirectories(path string, perm os.FileMode) error {
 	err := os.MkdirAll(path, perm)
 	if err != nil {
 		return fmt.Errorf("failed to create directories: %w", err)
+	}
+
+	return nil
+}
+
+func SetPermissions(path string, username string) error {
+	osUser, err := user.Lookup(username)
+	if err != nil {
+		return fmt.Errorf("failed to lookup postgres user: %s, error: %v", username, err)
+	}
+
+	uid, _ := strconv.Atoi(osUser.Uid)
+	gid, _ := strconv.Atoi(osUser.Gid)
+
+	if err := os.Chown(path, uid, gid); err != nil {
+		return fmt.Errorf("failed to change ownership of directory: %s, error: %v", path, err)
 	}
 
 	return nil

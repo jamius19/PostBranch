@@ -26,7 +26,7 @@ func EmptyDataset(ctx context.Context, pool *dao.ZfsPool, name string) (*dao.Zfs
 		PoolID: pool.ID,
 	}
 
-	createdDataset, err := data.Fetcher.CreateDataset(ctx, dataset)
+	createdDataset, err := data.Db.CreateDataset(ctx, dataset)
 	if err != nil {
 		log.Errorf("Failed to insert dataset. Name: %s Pool: %v Error: %s", name, pool, err)
 		return nil, err

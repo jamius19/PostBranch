@@ -36,7 +36,7 @@ func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*dao.Repo, *da
 			PoolID: pool.ID,
 		}
 
-		createdRepo, err := data.Fetcher.CreateRepo(ctx, repoCreateDto)
+		createdRepo, err := data.Db.CreateRepo(ctx, repoCreateDto)
 		if err != nil {
 			// TODO: Cleanup Pool and Dataset
 			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoinit.Name, repoCreateDto, err)
@@ -85,7 +85,7 @@ func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
 		return fmt.Errorf("failed to remove mount path: %w", err)
 	}
 
-	err = data.Fetcher.DeletePool(ctx, pool.ID)
+	err = data.Db.DeletePool(ctx, pool.ID)
 	if err != nil {
 		return err
 	}

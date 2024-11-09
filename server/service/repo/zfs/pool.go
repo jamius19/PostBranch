@@ -67,7 +67,7 @@ func createPool(ctx context.Context, repoinit *repo.InitDto, loopNo int) (*dao.Z
 		PoolType:  repoinit.RepoType,
 	}
 
-	pool, err := data.Fetcher.CreatePool(ctx, poolData)
+	pool, err := data.Db.CreatePool(ctx, poolData)
 	if err != nil {
 		// TODO: Cleanup Pool
 		log.Errorf("Failed to insert createPool. Repo:%v Path: %s Error:%s", poolData, devicePath, err)
@@ -80,7 +80,7 @@ func createPool(ctx context.Context, repoinit *repo.InitDto, loopNo int) (*dao.Z
 }
 
 func MountAll() error {
-	pools, err := data.Fetcher.ListPool(context.Background())
+	pools, err := data.Db.ListPool(context.Background())
 	if err != nil {
 		log.Errorf("Failed to list pools: %s", err)
 		return err
@@ -178,7 +178,7 @@ func cleanDanglingLoopbackDevices(pool *dao.ZfsPool) error {
 
 func UnmountAll() error {
 	log.Infof("Unmounting all pools")
-	pools, err := data.Fetcher.ListPool(context.Background())
+	pools, err := data.Db.ListPool(context.Background())
 	if err != nil {
 		log.Errorf("Failed to list pools: %s", err)
 		return err
