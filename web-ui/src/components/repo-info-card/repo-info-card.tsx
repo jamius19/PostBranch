@@ -37,36 +37,26 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
                 </div>
                 <div className={"mt-1 text-[0.85rem]"}>
                     <Database size={15} className={"inline-block relative top-[-1.5px]"}/>
-                    {repo.pg ? (
-                        <span className={"ml-2"}>Postgres {repo.pg.version}</span>
-                    ) : (
-                        <span className={"ml-2"}>Postgres not imported</span>
-                    )}
+                    <span className={"ml-2"}>Postgres {repo.pg.version}</span>
                 </div>
 
                 <div className={"mt-1 text-[0.85rem]"}>
                     <Box size={15} className={"inline-block relative top-[-1.5px]"}/>
-                    <span className={"ml-2"}>{formatValue(repo.sizeInMb)}</span>
+                    <span className={"ml-2"}>{formatValue(repo.pool.sizeInMb)}</span>
                 </div>
 
                 <div className={"mt-1 text-[0.85rem] font-bold"}>
                     <Activity size={15} className={"inline-block relative top-[-1.5px]"}/>
-                    {repo.pg ? (
-                        <>
-                            {repo.pg.status === "STARTED" && (
-                                <span className={"ml-2"}>Postgres data import in progress</span>
-                            )}
+                    {repo.pg.status === "STARTED" && (
+                        <span className={"ml-2"}>Postgres data import in progress</span>
+                    )}
 
-                            {repo.pg.status === "COMPLETED" && (
-                                <span className={"ml-2"}>Repository is ready</span>
-                            )}
+                    {repo.pg.status === "COMPLETED" && (
+                        <span className={"ml-2"}>Repository is ready</span>
+                    )}
 
-                            {repo.pg.status === "FAILED" && (
-                                <span className={"ml-2"}>Postgres data importing failed</span>
-                            )}
-                        </>
-                    ) : (
-                        <span className={"ml-2"}>Postgres not imported</span>
+                    {repo.pg.status === "FAILED" && (
+                        <span className={"ml-2"}>Postgres data importing failed</span>
                     )}
                 </div>
             </div>

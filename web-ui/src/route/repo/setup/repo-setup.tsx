@@ -32,15 +32,15 @@ import {Link, Navigate, useLocation} from "react-router-dom";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import StorageSlider, {MIN_VALUE} from "@/components/storage-slider.tsx";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
-import {RepoPgResponseDto} from "@/@types/repo/repo-pg-init-dto.ts";
+import {PgAdapterNames, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
 
 const blockSchema = z.object({
     repoType: z.literal("block"),
 });
 
-
 interface RepoSetupState {
-    pgConfig?: RepoPgResponseDto
+    pgConfig: PgResponseDto;
+    adapter: PgAdapterNames
 }
 
 const RepoSetup = (): JSX.Element => {
@@ -53,7 +53,12 @@ const RepoSetup = (): JSX.Element => {
 
     const repoInit = useNotifiableMutation({
         mutationKey: ["repo-init"],
-        mutationFn: initRepo,
+        mutationFn: (repoConfig: RepoInitDto) => {
+            return initRepo(
+                {repoConfig, pgConfig: repoSetupState.pgConfig.pgConfig},
+                repoSetupState.adapter
+            );
+        },
         messages: {
             pending: "Creating repository",
             success: "Repository created successfully",
@@ -66,7 +71,7 @@ const RepoSetup = (): JSX.Element => {
     const generatedName = generateName();
     const repoInitSuccess = repoInit.isSuccess;
     const repoInitPending = repoInit.isPending;
-    const repoSizeMinValue = Math.max((repoSetupState?.pgConfig?.clusterSizeInMb || 0) + 25, MIN_VALUE);
+    const repoSizeMinValue = Math.max((repoSetupState.pgConfig?.clusterSizeInMb || 0) + 25, MIN_VALUE);
 
     const baseFormSchema = useMemo(() => z.object({
         name: z.string()
@@ -84,7 +89,7 @@ const RepoSetup = (): JSX.Element => {
             .refine(value => !value.includes(" "), {
                 message: "Path path must not contain spaces",
             })
-            .refine(val => !reposQuery.data?.data?.some(repo => repo.path === val),
+            .refine(val => !reposQuery.data?.data?.some(repo => repo.pool.Path === val),
                 "Repository with the same path already exists"),
     }), [reposQuery]);
 
@@ -115,7 +120,7 @@ const RepoSetup = (): JSX.Element => {
     const repoType = repoForm.watch("repoType");
 
     const onSubmit = useCallback(async (data: RepoInitDto) => {
-        await repoInit.mutateAsync({...data, ...repoSetupState.pgConfig!});
+        await repoInit.mutateAsync(data);
     }, [repoInit, repoSetupState?.pgConfig]);
 
     const clearVirtualStorageValues = useCallback((value: RepoType) => {

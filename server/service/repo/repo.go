@@ -4,52 +4,52 @@ import (
 	"context"
 	"fmt"
 	"github.com/jamius19/postbranch/cmd"
-	"github.com/jamius19/postbranch/data"
-	"github.com/jamius19/postbranch/data/dao"
-	"github.com/jamius19/postbranch/data/dto/repo"
+	"github.com/jamius19/postbranch/db"
+	"github.com/jamius19/postbranch/db/gen/model"
+	repoDto "github.com/jamius19/postbranch/dto/repo"
 	"github.com/jamius19/postbranch/logger"
-	"github.com/jamius19/postbranch/service/repo/zfs"
+	"github.com/jamius19/postbranch/service/zfs"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
 )
 
 var log = logger.Logger
 
-func InitializeRepo(ctx context.Context, repoinit *repo.InitDto) (*dao.Repo, *dao.ZfsPool, error) {
-	if repoinit.RepoType == "virtual" {
+func InitializeRepo(ctx context.Context, repoInit repoDto.Info) (model.Repo, model.ZfsPool, error) {
+	if repoInit.GetRepoType() == "virtual" {
 		log.Infof("Initializing virtual repo")
 
-		pool, err := zfs.VirtualPool(ctx, repoinit)
+		pool, err := zfs.VirtualPool(ctx, repoInit)
 		if err != nil {
-			return nil, nil, err
+			return model.Repo{}, model.ZfsPool{}, err
 		}
 
 		log.Infof("Initialized virtual pool. PoolInfo: %v", pool)
 
 		_, err = zfs.EmptyDataset(ctx, pool, "main")
 		if err != nil {
-			return nil, nil, err
+			return model.Repo{}, model.ZfsPool{}, err
 		}
 
-		repoCreateDto := dao.CreateRepoParams{
-			Name:   repoinit.Name,
-			PoolID: pool.ID,
+		repoInfo := model.Repo{
+			Name:   repoInit.GetName(),
+			PoolID: *pool.ID,
 		}
 
-		createdRepo, err := data.Db.CreateRepo(ctx, repoCreateDto)
+		createdRepo, err := db.CreateRepo(ctx, repoInfo)
 		if err != nil {
 			// TODO: Cleanup Pool and Dataset
-			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoinit.Name, repoCreateDto, err)
-			return nil, nil, responseerror.From("Failed to create repository")
+			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoInit.GetName(), repoInfo, err)
+			return model.Repo{}, model.ZfsPool{}, responseerror.From("Failed to create repository")
 		}
 
-		return &createdRepo, pool, nil
+		return createdRepo, pool, nil
 	}
 
-	return nil, nil, fmt.Errorf("not implemented yet")
+	return model.Repo{}, model.ZfsPool{}, fmt.Errorf("not implemented yet")
 }
 
-func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
+func DeleteRepo(ctx context.Context, repo model.Repo, pool model.ZfsPool) error {
 	log.Infof("Deleting repo: %v, pool: %v", repo, pool)
 
 	// TODO: Stop postgres
@@ -85,7 +85,7 @@ func DeleteRepo(ctx context.Context, repo *dao.Repo, pool *dao.ZfsPool) error {
 		return fmt.Errorf("failed to remove mount path: %w", err)
 	}
 
-	err = data.Db.DeletePool(ctx, pool.ID)
+	err = db.DeletePool(ctx, *pool.ID)
 	if err != nil {
 		return err
 	}

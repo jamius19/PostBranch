@@ -7,6 +7,7 @@ import (
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -14,12 +15,13 @@ const (
 	Completed = "COMPLETED"
 	Failed    = "FAILED"
 
-	ClusterSizeQuery = "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
-	VersionQuery     = "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
+	ClusterSizeQuery    = "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
+	VersionQuery        = "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
+	SuperUserCheckQuery = `SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER;`
 
-	SuperUserCheckQuery  = `SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER;`
-	ConfigFilePathsQuery = `SELECT string_agg(DISTINCT(sourcefile), ', ') AS file_names FROM pg_settings WHERE source = 'configuration file';`
-	HbaFilePathsQuery    = `SELECT string_agg(DISTINCT file_name, ';') AS file_names FROM pg_hba_file_rules;`
+	ConfigFilePathQuery = `SHOW config_file;`
+	HbaFilePathQuery    = `SHOW hba_file;`
+	IdentFilePathQuery  = `SHOW ident_file;`
 
 	// LocalReplicationCheckQuery TODO: Fix potential sql injection
 	LocalReplicationCheckQuery = `SELECT CASE 
@@ -52,19 +54,15 @@ const (
 
 var log = logger.Logger
 
-type AuthInfo interface {
-	GetPostgresPath() string
-	GetConnectionType() string
-	GetPostgresOsUser() string
+type HostAuthInfo interface {
 	GetHost() string
-	GetPort() int
+	GetPort() int32
 	GetDbUsername() string
 	GetPassword() string
 	GetSslMode() string
-	IsHostConnection() bool
 }
 
-func GetConnString(pg AuthInfo) string {
+func GetConnString(pg HostAuthInfo) string {
 	return fmt.Sprintf(
 		"user=%s host=%s port=%d password=%s dbname=postgres sslmode=%s",
 		pg.GetDbUsername(),
@@ -75,27 +73,18 @@ func GetConnString(pg AuthInfo) string {
 	)
 }
 
-func Single(auth AuthInfo, query string) (string, error) {
+func Single(auth HostAuthInfo, query string) (string, error) {
 	var result string
 
-	if auth.IsHostConnection() {
-		_, rows, cleanup, err := RunQuery(auth, query)
+	_, rows, cleanup, err := RunQuery(auth, query)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
+
+	for rows.Next() {
+		err := rows.Scan(&result)
 		if err != nil {
-			return "", err
-		}
-		defer cleanup()
-
-		for rows.Next() {
-			err := rows.Scan(&result)
-			if err != nil {
-				return "", fmt.Errorf("failed to scan postgres. error: %v", err)
-			}
-		}
-	} else {
-		output, err := GetPsqlCommand(auth, query)
-		result = util.TrimmedString(output)
-
-		if err != nil || result == cmd.EmptyOutput {
 			return "", fmt.Errorf("failed to scan postgres. error: %v", err)
 		}
 	}
@@ -103,7 +92,20 @@ func Single(auth AuthInfo, query string) (string, error) {
 	return result, nil
 }
 
-func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error) {
+func SingleLocal(pgOsUser, pgPath, query string) (string, error) {
+	var result string
+
+	output, err := GetPsqlCommand(pgOsUser, pgPath, query)
+	result = util.TrimmedString(output)
+
+	if err != nil || result == cmd.EmptyOutput {
+		return "", fmt.Errorf("failed to scan postgres. error: %v", err)
+	}
+
+	return result, nil
+}
+
+func RunQuery(pgInit HostAuthInfo, query string) (*sql.DB, *sql.Rows, func(), error) {
 	cleanup := func() {}
 	log.Debugf("Running query: %s", query)
 
@@ -142,7 +144,7 @@ func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error)
 	return db, rows, cleanup, err
 }
 
-func CreatePgPassFile(auth AuthInfo) error {
+func CreatePgPassFile(auth HostAuthInfo) error {
 	pgPassContent := fmt.Sprintf(
 		`%s:%d:*:%s:%s`,
 		auth.GetHost(),
@@ -150,8 +152,8 @@ func CreatePgPassFile(auth AuthInfo) error {
 		auth.GetDbUsername(),
 		auth.GetPassword(),
 	)
-
-	err := os.WriteFile(os.ExpandEnv("$HOME/.pgpass"), []byte(pgPassContent), 0600)
+	pgPassPath := filepath.Join(os.ExpandEnv("$HOME"), ".pgpass")
+	err := os.WriteFile(pgPassPath, []byte(pgPassContent), 0600)
 
 	if err != nil {
 		return fmt.Errorf("failed to create pgpass file. error: %v", err)
@@ -161,7 +163,7 @@ func CreatePgPassFile(auth AuthInfo) error {
 }
 
 func RemovePgPassFile() error {
-	err := os.Remove(os.ExpandEnv("$HOME/.pgpass"))
+	err := os.Remove(filepath.Join(os.ExpandEnv("$HOME"), ".pgpass"))
 
 	if err != nil {
 		return fmt.Errorf("failed to remove pgpass file. error: %v", err)
@@ -170,14 +172,14 @@ func RemovePgPassFile() error {
 	return nil
 }
 
-func GetPsqlCommand(auth AuthInfo, query string) (*string, error) {
+func GetPsqlCommand(pgOsUser, pgPath, query string) (*string, error) {
 	return cmd.Single(
 		"pg-version-check",
 		false,
 		false,
 		"sudo",
-		"-u", auth.GetPostgresOsUser(),
-		auth.GetPostgresPath()+"/bin/psql",
+		"-u", pgOsUser,
+		filepath.Join(pgPath, "bin", "psql"),
 		"-t",
 		"-w",
 		"-P", "format=unaligned",

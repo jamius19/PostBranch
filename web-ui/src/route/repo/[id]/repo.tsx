@@ -72,25 +72,25 @@ const Repo = () => {
                 </Button>
             </div>
 
-            <InfoBlock status={repo.pg?.status}/>
+            <InfoBlock status={repo.pg.status}/>
 
             <div className={"flex mt-2 mb-12 flex-col gap-2 text-sm"}>
                 <p>
                     <Box
                         className={"inline-block relative top-[-1px] me-1.5"}
                         size={16}/>
-                    {formatValue(repo.sizeInMb)}
+                    {formatValue(repo.pool.sizeInMb)}
                 </p>
 
                 <p>
                     <Database
                         className={"inline-block relative top-[-1.5px] me-1.5"}
                         size={15}/>
-                    {repo.pg?.version ? `Postgres ${repo.pg.version}` : "Postgres not imported"}
+                    Postgres {repo.pg.version}
                 </p>
             </div>
 
-            {!!repo.pg && repo.pg.status === "COMPLETED" && (
+            {repo.pg.status === "COMPLETED" && (
                 <div className={""}>
                     <div className={"mb-2 flex items-center gap-3"}>
                         <GitBranch size={22} className={"relative top-[-5.5px]"}/>
@@ -127,7 +127,7 @@ const Repo = () => {
                 </div>
             )}
 
-            {!!repo.pg && repo.pg.status === "FAILED" && (
+            {repo.pg.status === "FAILED" && (
                 <div>
                     <div>
                         Output of the last import attempt. Please consult the PostBranch log for more details.
@@ -150,21 +150,17 @@ const Repo = () => {
                             Change Postgres Config <ArrowRight/>
                         </Button>
                     </Link>
-                </div>
-            )}
 
-            {!repo.pg && (
-                <div>
-                    You haven&#39;t imported a PostgreSQL database yet.
-
-                    <Link
-                        disabled={disableInteraction}
-                        to={`/repo/setup/${repoId}/postgres`}
-                        className={"mt-4 block"}>
-                        <Button disabled={disableInteraction}>
-                            Import Postgres <ArrowRight/>
-                        </Button>
-                    </Link>
+                    <div className={"mt-8"}>
+                        <Link
+                            disabled={disableInteraction}
+                            to={`/repo/setup/${repoId}/postgres`}
+                            className={"mt-4 block"}>
+                            <Button disabled={disableInteraction}>
+                                Import Postgres <ArrowRight/>
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
             )}
         </div>

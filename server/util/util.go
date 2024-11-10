@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/jamius19/postbranch/data/dto"
+	"github.com/jamius19/postbranch/dto"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"

@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"github.com/jamius19/postbranch/data"
+	"github.com/jamius19/postbranch/db"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/opts"
-	"github.com/jamius19/postbranch/service/repo/zfs"
+	"github.com/jamius19/postbranch/service/zfs"
 	"github.com/jamius19/postbranch/web"
 	"os"
 	"os/signal"
@@ -42,8 +42,8 @@ func main() {
 
 	rootCtx, rootCancel := context.WithCancel(context.Background())
 
-	db := data.Initialize()
-	defer db.Close()
+	closeDb := db.Initialize()
+	defer closeDb()
 
 	go web.Initialize(rootCtx, &webWg)
 

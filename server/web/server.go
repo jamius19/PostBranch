@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/opts"
-	"github.com/jamius19/postbranch/service/repo/zfs"
+	"github.com/jamius19/postbranch/service/zfs"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/middleware"
 	"net/http"
