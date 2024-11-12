@@ -97,6 +97,12 @@ const PgSetupLocal = (): JSX.Element => {
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
+                            Configure Connection
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator>
+                            <ChevronRightIcon/>
+                        </BreadcrumbSeparator>
+                        <BreadcrumbItem>
                             <BreadcrumbPage>Configure PostgreSQL</BreadcrumbPage>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
@@ -108,7 +114,7 @@ const PgSetupLocal = (): JSX.Element => {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <h1 className={"mb-10"}>PostgreSQL Data Import</h1>
+            <h1 className={"mb-10"}>PostgreSQL Connection</h1>
 
             <Form {...pgForm}>
                 <form
@@ -217,7 +223,11 @@ const PgSetupLocal = (): JSX.Element => {
                                 <FormDescription>
                                     Username of the Local PostgreSQL operating system account.<br/>
                                     If you&#39;re unsure, use the default value <code
-                                    className={"font-bold"}>postgres</code>
+                                    className={"font-bold"}>postgres</code><br/>
+                                    <i>
+                                        (This MUST be a <code
+                                        className={"font-bold"}>superuser</code>)
+                                    </i>
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -230,7 +240,7 @@ const PgSetupLocal = (): JSX.Element => {
                             <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
 
                             <p>
-                                <b>All done! The database cluster size
+                                <b>Connection successful! The database cluster size
                                     is {formatValue(pgValidate.data.data!.clusterSizeInMb)}</b>.
                             </p>
                         </div>
@@ -244,7 +254,7 @@ const PgSetupLocal = (): JSX.Element => {
 
                             <Spinner isLoading={repoInitPending}/>
                             {repoInitSuccess && <Check/>}
-                            {repoInitSuccess ? "Import Started" : "Import Postgres Data"}
+                            {repoInitSuccess ? "Connected" : "Connect"}
                         </Button>
 
                         {repoInitSuccess && (

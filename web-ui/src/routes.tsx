@@ -6,6 +6,7 @@ import PgSetupLocal from "@/route/repo/setup/pg/pg-setup-local.tsx";
 import Repo from "@/route/repo/[id]/repo.tsx";
 import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
 import PgSetupHost from "@/route/repo/setup/pg/pg-setup-host.tsx";
+import PgImportMode from "@/route/repo/setup/pg-import-mode.tsx";
 
 const router = createBrowserRouter([
     {
@@ -24,6 +25,10 @@ const router = createBrowserRouter([
             {
                 path: "/repo/:repoId",
                 element: <Repo/>,
+            },
+            {
+                path: "/repo/setup/postgres",
+                element: <PgImportMode/>,
             },
             {
                 path: "/repo/setup/postgres/local",

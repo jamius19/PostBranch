@@ -12,12 +12,10 @@ interface RepoInfoCardProps {
 const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
     let bgClassNames;
 
-    if (repo.pg) {
-        if (repo.pg.status === 'FAILED') {
-            bgClassNames = "border-2 border-red-600 border-dashed text-red-600 shadow-red-500/20 hover:shadow-red-500/20"
-        } else {
-            bgClassNames = "bg-gray-700 hover:bg-gray-800"
-        }
+    if (repo.pg.status === 'FAILED') {
+        bgClassNames = "border-2 border-red-600 border-dashed text-red-600 shadow-red-500/20 hover:shadow-red-500/20"
+    } else if (repo.pg.status === 'COMPLETED') {
+        bgClassNames = "bg-gray-700 hover:bg-gray-800"
     } else {
         bgClassNames = "bg-gray-500 hover:bg-gray-600"
     }
@@ -25,7 +23,7 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
     return (
         <Link to={`/repo/${repo.id}`}>
             <div
-                className={tm("cursor-pointer w-full h-full text-white hover:shadow-xl transition-all duration-500 rounded-lg shadow-lg p-6", bgClassNames)}>
+                className={tm("cursor-pointer w-full h-full text-white shadow-lg hover:shadow-xl transition-all duration-500 rounded-lg p-6", bgClassNames)}>
                 <h3 className="font-title text mono font-bold">{repo.name}</h3>
 
                 <div className={"mt-3 text-[0.85rem]"}>

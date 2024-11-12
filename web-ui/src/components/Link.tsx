@@ -1,5 +1,6 @@
 import {Link as RRLink, LinkProps as RRLinkProps} from "react-router-dom";
 import React from "react";
+import {clsx} from "clsx";
 
 
 interface LinkProps extends RRLinkProps {
@@ -8,16 +9,15 @@ interface LinkProps extends RRLinkProps {
 }
 
 const Link = (props: LinkProps) => {
-    const {children, disabled = false, ...rest} = props;
+    const {children, disabled = false, className, ...rest} = props;
 
     return (
-        <div>
-            <RRLink
-                {...rest}
-                style={{pointerEvents: disabled ? "none" : "auto"}}>
-                {children}
-            </RRLink>
-        </div>
+        <RRLink
+            {...rest}
+            className={clsx(className, disabled ? "cursor-not-allowed" : "cursor-pointer")}
+            style={{pointerEvents: disabled ? "none" : "auto"}}>
+            {children}
+        </RRLink>
     );
 };
 

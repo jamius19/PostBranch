@@ -22,7 +22,6 @@ import {
     BreadcrumbPage,
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
-import {ChevronRightIcon} from "@radix-ui/react-icons";
 import {generateName} from '@criblinc/docker-names'
 import Spinner from "@/components/Spinner.tsx";
 import {ArrowRight, Check, Info} from "lucide-react";
@@ -33,6 +32,7 @@ import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import StorageSlider, {MIN_VALUE} from "@/components/storage-slider.tsx";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 import {PgAdapterNames, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
+import {ChevronRightIcon} from "@radix-ui/react-icons";
 
 const blockSchema = z.object({
     repoType: z.literal("block"),
@@ -167,18 +167,24 @@ const RepoSetup = (): JSX.Element => {
                 <Breadcrumb>
                     <BreadcrumbList>
                         <BreadcrumbItem>
-                            <BreadcrumbPage>Configure Storage</BreadcrumbPage>
+                            Configure Connection
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            Import Data
+                            Configure PostgreSQL
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator>
+                            <ChevronRightIcon/>
+                        </BreadcrumbSeparator>
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>Configure Storage</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <h1 className={"mb-10"}>Repository Setup</h1>
+            <h1 className={"mb-10"}>Repository Storage Setup</h1>
 
             <Form {...repoForm}>
                 <form

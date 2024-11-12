@@ -37,7 +37,7 @@ const RepoList = () => {
     return (
         <>
             <div className={"mb-4 flex justify-end"}>
-                <Link to={"/repo/setup/postgres/host"}>
+                <Link to={"/repo/setup/postgres"}>
                     <Button size={"sm"} variant={"outline"}>
                         <PackagePlus
                             size={13}

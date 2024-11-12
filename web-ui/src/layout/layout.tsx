@@ -1,8 +1,13 @@
 import {clsx} from "clsx";
 import {Link, Outlet} from "react-router-dom";
 import {Slide, ToastContainer} from "react-toastify";
+import React from "react";
 
-const Layout = () => {
+interface LayoutProps {
+    children?: React.ReactNode
+}
+
+const Layout = ({children}: LayoutProps) => {
     return (
         <div className={clsx("max-w-[930px] 3xl:xl:max-w-[1040px] mx-auto mt-20 mb-20")}>
             <header className={"mb-14"}>
@@ -23,7 +28,7 @@ const Layout = () => {
                 theme="light"
                 transition={Slide}
             />
-            <Outlet/>
+            {children ? children : <Outlet/>}
         </div>
     )
 }
