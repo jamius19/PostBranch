@@ -31,7 +31,7 @@ import {Link, Navigate, useLocation} from "react-router-dom";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import StorageSlider, {MIN_VALUE} from "@/components/storage-slider.tsx";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
-import {PgAdapterNames, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
+import {PgAdapterName, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
 
 const blockSchema = z.object({
@@ -39,8 +39,8 @@ const blockSchema = z.object({
 });
 
 interface RepoSetupState {
-    pgConfig: PgResponseDto;
-    adapter: PgAdapterNames
+    pgResponse?: PgResponseDto;
+    adapter?: PgAdapterName
 }
 
 const RepoSetup = (): JSX.Element => {
@@ -55,13 +55,13 @@ const RepoSetup = (): JSX.Element => {
         mutationKey: ["repo-init"],
         mutationFn: (repoConfig: RepoInitDto) => {
             return initRepo(
-                {repoConfig, pgConfig: repoSetupState.pgConfig.pgConfig},
-                repoSetupState.adapter
+                {repoConfig, pgConfig: repoSetupState.pgResponse!.pgConfig},
+                repoSetupState.adapter!
             );
         },
         messages: {
             pending: "Creating repository",
-            success: "Repository created successfully",
+            success: "Repository created and Postgres import started",
         },
         invalidates: ["repo-list"],
     });
@@ -71,7 +71,7 @@ const RepoSetup = (): JSX.Element => {
     const generatedName = generateName();
     const repoInitSuccess = repoInit.isSuccess;
     const repoInitPending = repoInit.isPending;
-    const repoSizeMinValue = Math.max((repoSetupState.pgConfig?.clusterSizeInMb || 0) + 25, MIN_VALUE);
+    const repoSizeMinValue = repoSetupState.pgResponse!.clusterSizeInMb + MIN_VALUE;
 
     const baseFormSchema = useMemo(() => z.object({
         name: z.string()
@@ -121,7 +121,7 @@ const RepoSetup = (): JSX.Element => {
 
     const onSubmit = useCallback(async (data: RepoInitDto) => {
         await repoInit.mutateAsync(data);
-    }, [repoInit, repoSetupState?.pgConfig]);
+    }, [repoInit, repoSetupState?.pgResponse]);
 
     const clearVirtualStorageValues = useCallback((value: RepoType) => {
         if (value === 'block') {
@@ -153,8 +153,8 @@ const RepoSetup = (): JSX.Element => {
         }
     }, [generatedName, repoForm, reposQuery.data, reposQuery.isSuccess]);
 
-    if (!repoSetupState?.pgConfig) {
-        return <Navigate to={"/error"} state={{message: "No PostgreSQL configuration found."}}/>;
+    if (!repoSetupState.pgResponse || !repoSetupState.adapter) {
+        return <Navigate to={"/error"} state={{message: "No Postgres configuration found."}}/>;
     }
 
     if (reposQuery.isPending || !nameUpdated) {
@@ -173,7 +173,7 @@ const RepoSetup = (): JSX.Element => {
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            Configure PostgreSQL
+                            Configure Postgres
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
@@ -280,7 +280,7 @@ const RepoSetup = (): JSX.Element => {
                     />
 
                     <div
-                        className={"flex items-center gap-2 bg-lime-200/70 text-xs text-lime-700 rounded-md px-4 py-3"}>
+                        className={"flex items-center gap-3 bg-blue-200/70 text-xs text-blue-700 rounded-md px-4 py-3"}>
                         <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
 
                         <p>
@@ -296,7 +296,7 @@ const RepoSetup = (): JSX.Element => {
                                     disabled: repoInitPending || repoInitSuccess,
                                     name: "sizeInMb",
                                 }}
-                                minSizeInMb={repoSetupState.pgConfig.clusterSizeInMb}/>
+                                minSizeInMb={repoSetupState.pgResponse.clusterSizeInMb}/>
                         </div>
                     )}
 
@@ -306,7 +306,7 @@ const RepoSetup = (): JSX.Element => {
                             variant={repoInitSuccess ? "success" : "default"}
                             disabled={repoInitPending || repoInitSuccess}>
 
-                            <Spinner isLoading={repoInitPending}/>
+                            <Spinner isLoading={repoInitPending} light/>
                             {repoInitSuccess && <Check/>}
                             {repoInitSuccess ? "Repository created" : "Create repository"}
                         </Button>

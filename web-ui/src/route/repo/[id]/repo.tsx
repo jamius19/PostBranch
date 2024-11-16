@@ -101,6 +101,8 @@ const Repo = () => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[100px]">Name</TableHead>
+                                <TableHead>Port</TableHead>
+                                <TableHead>Status</TableHead>
                                 <TableHead>Branched From</TableHead>
                                 <TableHead className="text-right">Created</TableHead>
                             </TableRow>
@@ -109,15 +111,25 @@ const Repo = () => {
                         <TableBody>
                             {repo.branches.length !== 0 ? repo.branches.map((branch) => (
                                 <TableRow key={branch.id}>
-                                    <TableCell className="font-medium w-[300px]">{branch.name}</TableCell>
-                                    <TableCell className={"w-[300px]"}>{branch.parentId ?? "—"}</TableCell>
+                                    <TableCell className="font-medium w-[200px]">{branch.name}</TableCell>
+                                    <TableCell className={"w-[100px]"}>{branch.port}</TableCell>
+                                    <TableCell className={"w-[150px]"}>
+                                        <div
+                                            className={"select-none bg-gray-800 text-white inline-flex items-center justify-center rounded-full border ps-2.5 pe-3 text-[11px] font-bold"}>
+                                            <span className={"relative top-[-1.5px] text-[23px] text-lime-400 me-1"}>
+                                                ●
+                                            </span>
+                                            {branch.pgStatus}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className={"w-[200px]"}>{branch.parentId ?? "—"}</TableCell>
                                     <TableCell className="text-right">
-                                        {dayjs.utc(repo.createdAt).format("DD/MM/YYYY HH:mm:ss")}
+                                        {dayjs.utc(repo.createdAt).format("DD MMM, YYYY HH:mm:ss")}
                                     </TableCell>
                                 </TableRow>
                             )) : (
                                 <TableRow>
-                                    <TableCell colSpan={3} className={"text-center text-muted-foreground/80"}>
+                                    <TableCell colSpan={5} className={"text-center text-muted-foreground/80"}>
                                         No branches found
                                     </TableCell>
                                 </TableRow>
@@ -150,17 +162,6 @@ const Repo = () => {
                             Change Postgres Config <ArrowRight/>
                         </Button>
                     </Link>
-
-                    <div className={"mt-8"}>
-                        <Link
-                            disabled={disableInteraction}
-                            to={`/repo/setup/${repoId}/postgres`}
-                            className={"mt-4 block"}>
-                            <Button disabled={disableInteraction}>
-                                Import Postgres <ArrowRight/>
-                            </Button>
-                        </Link>
-                    </div>
                 </div>
             )}
         </div>

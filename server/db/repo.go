@@ -27,9 +27,9 @@ func ListRepo(ctx context.Context) ([]RepoDetail, error) {
 			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
 			INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)).
 			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
-		ORDER_BY(table.Repo.Name.ASC())
+		ORDER_BY(table.Repo.CreatedAt.DESC())
 
-	log.Debugf("Query: %s", stmt.DebugSql())
+	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &repoDetailList)
 	if err != nil {
@@ -55,7 +55,7 @@ func GetRepo(ctx context.Context, repoId int64) (RepoDetail, error) {
 			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
 		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId)))
 
-	log.Debugf("Query: %s", stmt.DebugSql())
+	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &repoDetail)
 	if err != nil {
@@ -73,7 +73,7 @@ func CreateRepo(ctx context.Context, repo model.Repo) (model.Repo, error) {
 		VALUES(repo.Name, repo.PoolID).
 		RETURNING(table.Repo.AllColumns)
 
-	log.Debugf("Query: %s", stmt.DebugSql())
+	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &newRepo)
 	if err != nil {
@@ -88,7 +88,7 @@ func DeleteRepo(ctx context.Context, repoId int64) error {
 	stmt := table.Repo.DELETE().
 		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId)))
 
-	log.Debugf("Query: %s", stmt.DebugSql())
+	log.Tracef("Query: %s", stmt.DebugSql())
 	_, err := stmt.ExecContext(ctx, Db)
 	if err != nil {
 		log.Errorf("Can't delete repo: %s", err)
@@ -111,7 +111,7 @@ func CountRepoByNameOrPath(ctx context.Context, repoName, repoPath string) (int6
 				OR(table.ZfsPool.Path.EQ(sqlite.String(repoPath))),
 		)
 
-	log.Debugf("Query: %s", stmt.DebugSql())
+	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &count)
 	if err != nil {

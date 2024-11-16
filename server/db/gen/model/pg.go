@@ -17,6 +17,7 @@ type Pg struct {
 	Version   int32
 	Status    string
 	Output    *string
+	Adapter   string
 	RepoID    int32
 	CreatedAt time.Time
 	UpdatedAt time.Time

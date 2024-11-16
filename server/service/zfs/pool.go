@@ -8,9 +8,11 @@ import (
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/dto/repo"
 	"github.com/jamius19/postbranch/logger"
-	"github.com/jamius19/postbranch/util"
+	"github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
+	"strings"
+	"sync"
 )
 
 var log = logger.Logger
@@ -79,14 +81,14 @@ func createPool(ctx context.Context, repoinit repo.Info, loopNo int) (model.ZfsP
 	return pool, nil
 }
 
-func MountAll() error {
-	pools, err := db.ListPool(context.Background())
+func MountAll(ctx context.Context) error {
+	poolDetails, err := db.ListPoolDetail(ctx)
 	if err != nil {
 		log.Errorf("Failed to list pools: %s", err)
 		return err
 	}
 
-	if len(pools) == 0 {
+	if len(poolDetails) == 0 {
 		log.Info("No pools to mount")
 		return nil
 	}
@@ -94,17 +96,33 @@ func MountAll() error {
 	log.Infof("Mounting all pools")
 
 	// failedPools will contain the list of the pool(s) for which loopback device(s) failed to mount
-	var failedPools []model.ZfsPool
+	var failedPools []string
+	var poolWg sync.WaitGroup
 
-	for _, pool := range pools {
-		if pool.PoolType == "virtual" {
-			if err := setupLoopback(&pool); err != nil {
-				failedPools = append(failedPools, pool)
-				log.Errorf("Failed to setup loopback for pool %v: %s", pool, err)
+	log.Infof("Stopping potential dangling postgres instances")
+	for _, poolDetail := range poolDetails {
+		for _, dataset := range poolDetail.Datasets {
+			poolWg.Add(1)
+
+			go pg.StopDangingPg(
+				poolDetail.Pg.PgPath,
+				poolDetail.Pool.MountPath,
+				dataset.Name,
+				&poolWg,
+			)
+		}
+	}
+
+	poolWg.Wait()
+
+	for _, poolDetail := range poolDetails {
+		if poolDetail.Pool.PoolType == "virtual" {
+			if err := setupLoopback(&poolDetail.Pool); err != nil {
+				failedPools = append(failedPools, poolDetail.Pool.Name)
+				log.Errorf("Failed to setup loopback for pool %v: %s", poolDetail.Pool, err)
 			}
-
 		} else {
-			log.Infof("Pool is not virtual, skipping loopback setup. pool %v", pool)
+			log.Infof("Pool is not virtual, skipping loopback setup. pool %v", poolDetail.Pool)
 		}
 	}
 
@@ -112,18 +130,44 @@ func MountAll() error {
 		log.Errorf("Failed to setup loopback for the following pools: %v", failedPools)
 	}
 
-	log.Infof("**** This is a time consuming operation. Please wait. ****")
+	log.Infof("**** Importing all pools. This is a time consuming operation. Please wait. ****")
 
 	output, err := cmd.Single("import-zpools", false, false, "zpool", "import", "-a")
 	if err != nil {
-		log.Errorf("Failed to import zpools: %s, output: %s", err, util.SafeStringVal(output))
+		log.Errorf("Failed to import zpools: %s, output: %s", err, output)
 		return err
 	}
 
-	log.Infof("**** Done! Thank you for your patience! :) ****")
-	log.Infof("%d pool(s) are mounted.", len(pools))
+	log.Infof("%d pool(s) are mounted.", len(poolDetails))
 
-	// TODO: Start postgres
+	select {
+	case <-ctx.Done():
+		log.Infof("Root Context cancelled. Skipping database start")
+		return nil
+	default:
+	}
+
+	log.Infof("**** Importing all databases. This is a time consuming operation. Please wait. ****")
+
+	for _, poolDetail := range poolDetails {
+		for _, dataset := range poolDetail.Datasets {
+			poolWg.Add(1)
+
+			go pg.StartPgAndUpdateBranch(
+				ctx,
+				poolDetail.Pg.PgPath,
+				poolDetail.Pool.MountPath,
+				dataset.Name,
+				*dataset.ID,
+				&poolWg,
+			)
+		}
+	}
+
+	log.Infof("Waiting for all databases to start")
+	poolWg.Wait()
+
+	log.Infof("**** All Done! Thank you for your patience! :) ****")
 
 	return nil
 }
@@ -178,20 +222,44 @@ func cleanDanglingLoopbackDevices(pool *model.ZfsPool) error {
 
 func UnmountAll() error {
 	log.Infof("Unmounting all pools")
-	pools, err := db.ListPool(context.Background())
+	poolDetails, err := db.ListPoolDetail(context.Background())
+
 	if err != nil {
-		log.Errorf("Failed to list pools: %s", err)
+		log.Errorf("Failed to list poolDetails: %s", err)
 		return err
 	}
 
-	if len(pools) == 0 {
+	if len(poolDetails) == 0 {
 		log.Info("No pools to unmount")
 		return nil
 	}
 
-	for _, pool := range pools {
-		if err := Unmount(pool); err != nil {
-			log.Errorf("Failed to unmount pool: %v, error: %s", pool, err)
+	log.Infof("Stopping all databases")
+	var poolWg sync.WaitGroup
+	ctx := context.Background()
+
+	for _, poolDetail := range poolDetails {
+		for _, dataset := range poolDetail.Datasets {
+			poolWg.Add(1)
+
+			go pg.StopPgAndUpdateBranch(
+				ctx,
+				poolDetail.Pg.PgPath,
+				poolDetail.Pool.MountPath,
+				dataset.Name,
+				*dataset.ID,
+				&poolWg,
+			)
+		}
+	}
+
+	log.Infof("Waiting for all databases to stop")
+	poolWg.Wait()
+	log.Infof("All databases are stopped")
+
+	for _, poolDetail := range poolDetails {
+		if err := Unmount(poolDetail.Pool); err != nil {
+			log.Errorf("Failed to unmount pool: %v, error: %s", poolDetail.Pool, err)
 			return err
 		}
 	}
@@ -201,8 +269,6 @@ func UnmountAll() error {
 
 func Unmount(pool model.ZfsPool) error {
 	log.Infof("Unmounting pool %v", pool)
-
-	// TODO: Stop running postgres
 
 	loopbackPath, err := FindDevicePath(pool)
 	if err != nil {
@@ -251,5 +317,5 @@ func FindDevicePath(pool model.ZfsPool) (string, error) {
 		return "", err
 	}
 
-	return "/dev/" + util.TrimmedString(devicePath), nil
+	return "/dev/" + strings.TrimSpace(devicePath), nil
 }

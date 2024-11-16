@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"github.com/jamius19/postbranch/db"
 	"time"
 )
 
@@ -15,17 +16,20 @@ type Response struct {
 }
 
 type Pg struct {
-	ID      *int32  `json:"id"`
-	Version int32   `json:"version"`
-	Status  string  `json:"status"`
-	Output  *string `json:"output"`
+	ID      *int32      `json:"id"`
+	Version int32       `json:"version"`
+	Status  db.PgStatus `json:"status"`
+	Output  *string     `json:"output"`
 }
 
 type Branch struct {
-	ID        *int32    `json:"id"`
-	Name      string    `json:"name"`
-	ParentID  *int32    `json:"parentId"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        *int32            `json:"id"`
+	Name      string            `json:"name"`
+	Status    db.BranchStatus   `json:"status"`
+	PgStatus  db.BranchPgStatus `json:"pgStatus"`
+	Port      int32             `json:"port"`
+	ParentID  *int32            `json:"parentId"`
+	CreatedAt time.Time         `json:"createdAt"`
 }
 
 type Pool struct {

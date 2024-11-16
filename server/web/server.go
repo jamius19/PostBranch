@@ -18,18 +18,21 @@ import (
 var log = logger.Logger
 
 func Initialize(rootCtx context.Context, webWg *sync.WaitGroup) {
-	webWg.Add(1)
 	defer webWg.Done()
 
-	err := zfs.MountAll()
+	err := zfs.MountAll(rootCtx)
 	if err != nil {
 		log.Fatal("Failed to mount ZFS pool(s). Error: %s", err)
 	}
 
 	select {
 	case <-rootCtx.Done():
-		log.Info("Received interrupt/terminate signal, shutting down...")
-		zfs.UnmountAll()
+		log.Info("Root context cancelled. Unmounting pools")
+		err := zfs.UnmountAll()
+		if err != nil {
+			log.Errorf("Failed to unmount ZFS pool(s). error: %s", err)
+			return
+		}
 		return
 	default:
 	}

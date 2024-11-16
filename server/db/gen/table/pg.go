@@ -22,6 +22,7 @@ type pgTable struct {
 	Version   sqlite.ColumnInteger
 	Status    sqlite.ColumnString
 	Output    sqlite.ColumnString
+	Adapter   sqlite.ColumnString
 	RepoID    sqlite.ColumnInteger
 	CreatedAt sqlite.ColumnTimestamp
 	UpdatedAt sqlite.ColumnTimestamp
@@ -70,11 +71,12 @@ func newPgTableImpl(schemaName, tableName, alias string) pgTable {
 		VersionColumn   = sqlite.IntegerColumn("version")
 		StatusColumn    = sqlite.StringColumn("status")
 		OutputColumn    = sqlite.StringColumn("output")
+		AdapterColumn   = sqlite.StringColumn("adapter")
 		RepoIDColumn    = sqlite.IntegerColumn("repo_id")
 		CreatedAtColumn = sqlite.TimestampColumn("created_at")
 		UpdatedAtColumn = sqlite.TimestampColumn("updated_at")
-		allColumns      = sqlite.ColumnList{IDColumn, PgPathColumn, VersionColumn, StatusColumn, OutputColumn, RepoIDColumn, CreatedAtColumn, UpdatedAtColumn}
-		mutableColumns  = sqlite.ColumnList{PgPathColumn, VersionColumn, StatusColumn, OutputColumn, RepoIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		allColumns      = sqlite.ColumnList{IDColumn, PgPathColumn, VersionColumn, StatusColumn, OutputColumn, AdapterColumn, RepoIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		mutableColumns  = sqlite.ColumnList{PgPathColumn, VersionColumn, StatusColumn, OutputColumn, AdapterColumn, RepoIDColumn, CreatedAtColumn, UpdatedAtColumn}
 	)
 
 	return pgTable{
@@ -86,6 +88,7 @@ func newPgTableImpl(schemaName, tableName, alias string) pgTable {
 		Version:   VersionColumn,
 		Status:    StatusColumn,
 		Output:    OutputColumn,
+		Adapter:   AdapterColumn,
 		RepoID:    RepoIDColumn,
 		CreatedAt: CreatedAtColumn,
 		UpdatedAt: UpdatedAtColumn,

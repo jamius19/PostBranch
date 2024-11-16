@@ -22,6 +22,8 @@ import (
 var log = logger.Logger
 
 func InitializeLocalRepo(w http.ResponseWriter, r *http.Request) {
+	log.Info("Initializing local repo")
+
 	var repoInit repoDto.InitDto[pg.LocalImportReqDto]
 
 	if err := json.NewDecoder(r.Body).Decode(&repoInit); err != nil {
@@ -80,7 +82,7 @@ func InitializeLocalRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requiredSize := clusterSize + repoDto.MinSizeInMb
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
 
 	if repoInit.RepoConfig.SizeInMb < requiredSize {
 		log.Errorf("Requested size of %d MB is too small. Cluster size should be at least %d MB",
@@ -106,7 +108,7 @@ func InitializeLocalRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdPg, err := local.Import(r.Context(), repoInit, createdRepo, pool, nil)
+	createdPg, err := local.Import(r.Context(), repoInit.PgConfig, createdRepo, pool, nil)
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
@@ -115,7 +117,7 @@ func InitializeLocalRepo(w http.ResponseWriter, r *http.Request) {
 	pgResponse := repoDto.Pg{
 		ID:      createdPg.ID,
 		Version: createdPg.Version,
-		Status:  createdPg.Status,
+		Status:  db.PgStatus(createdPg.Status),
 		Output:  createdPg.Output,
 	}
 
@@ -144,6 +146,8 @@ func InitializeLocalRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
+	log.Info("Initializing host repo")
+
 	var repoInit repoDto.InitDto[pg.HostImportReqDto]
 
 	if err := json.NewDecoder(r.Body).Decode(&repoInit); err != nil {
@@ -202,7 +206,7 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requiredSize := clusterSize + repoDto.MinSizeInMb
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
 
 	if repoInit.RepoConfig.SizeInMb < requiredSize {
 		log.Errorf("Requested size of %d MB is too small. Cluster size should be at least %d MB",
@@ -228,7 +232,7 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdPg, err := host.Import(r.Context(), repoInit, createdRepo, pool, nil)
+	createdPg, err := host.Import(r.Context(), repoInit.PgConfig, createdRepo, pool, nil)
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
@@ -237,7 +241,7 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 	pgResponse := repoDto.Pg{
 		ID:      createdPg.ID,
 		Version: createdPg.Version,
-		Status:  createdPg.Status,
+		Status:  db.PgStatus(createdPg.Status),
 		Output:  createdPg.Output,
 	}
 
@@ -255,6 +259,240 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		Pg:        pgResponse,
 		CreatedAt: createdRepo.CreatedAt,
 		UpdatedAt: createdRepo.UpdatedAt,
+	}
+
+	response := dto.Response[repoDto.Response]{
+		Data:  &repoResponse,
+		Error: nil,
+	}
+
+	util.WriteResponse(w, r, response, http.StatusOK)
+}
+
+func ReInitializeLocalPg(w http.ResponseWriter, r *http.Request) {
+	log.Infof("Re-Initializing local repo with ID: %s", chi.URLParam(r, "repoId"))
+
+	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Repo Id should be a number"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	var pgConfig pg.LocalImportReqDto
+	if err := json.NewDecoder(r.Body).Decode(&pgConfig); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	if err := validation.Validate(pgConfig); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Invalid repository id"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	if err := local.Validate(pgConfig); err != nil {
+		util.WriteError(
+			w,
+			r,
+			err,
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	clusterSize, err := local.GetClusterSize(pgConfig)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Can't connect to PostgreSQL. Is it running and is the provided configuration correct?"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
+
+	if repoDetail.Pool.SizeInMb < requiredSize {
+		log.Errorf("Database Cluster size is %d MB, but the repository size is %d MB. Please increase the repository size",
+			requiredSize, repoDetail.Pool.SizeInMb)
+
+		util.WriteError(
+			w,
+			r,
+			responseerror.From(
+				fmt.Sprintf("Database Cluster size is %d MB, but the repository size is %d MB. Please increase the repository size",
+					requiredSize, repoDetail.Pool.SizeInMb),
+			),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	updatedPg, err := local.Import(r.Context(), pgConfig, repoDetail.Repo, repoDetail.Pool, &repoDetail.Pg)
+	if err != nil {
+		util.WriteError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	pgResponse := repoDto.Pg{
+		ID:      updatedPg.ID,
+		Version: updatedPg.Version,
+		Status:  db.PgStatus(updatedPg.Status),
+		Output:  updatedPg.Output,
+	}
+
+	poolResponse := repoDto.Pool{
+		ID:       repoDetail.Pool.ID,
+		Type:     repoDetail.Pool.PoolType,
+		SizeInMb: repoDetail.Pool.SizeInMb,
+		Path:     repoDetail.Pool.Path,
+	}
+
+	repoResponse := repoDto.Response{
+		ID:        repoDetail.Repo.ID,
+		Name:      repoDetail.Repo.Name,
+		Pool:      poolResponse,
+		Pg:        pgResponse,
+		CreatedAt: repoDetail.Repo.CreatedAt,
+		UpdatedAt: repoDetail.Repo.UpdatedAt,
+	}
+
+	response := dto.Response[repoDto.Response]{
+		Data:  &repoResponse,
+		Error: nil,
+	}
+
+	util.WriteResponse(w, r, response, http.StatusOK)
+}
+
+func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
+	log.Infof("Re-Initializing host repo with ID: %s", chi.URLParam(r, "repoId"))
+
+	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Repo Id should be a number"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	var pgConfig pg.HostImportReqDto
+	if err := json.NewDecoder(r.Body).Decode(&pgConfig); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	if err := validation.Validate(pgConfig); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Invalid repository id"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	if err := host.Validate(pgConfig); err != nil {
+		util.WriteError(
+			w,
+			r,
+			err,
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	clusterSize, err := host.GetClusterSize(pgConfig)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Can't connect to PostgreSQL. Is it running and is the provided configuration correct?"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
+
+	if repoDetail.Pool.SizeInMb < requiredSize {
+		log.Errorf("Database Cluster size is %d MB, but the repository size is %d MB. Please increase the repository size",
+			requiredSize, repoDetail.Pool.SizeInMb)
+
+		util.WriteError(
+			w,
+			r,
+			responseerror.From(
+				fmt.Sprintf("Database Cluster size is %d MB, but the repository size is %d MB. Please increase the repository size",
+					requiredSize, repoDetail.Pool.SizeInMb),
+			),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	updatedPg, err := host.Import(r.Context(), pgConfig, repoDetail.Repo, repoDetail.Pool, &repoDetail.Pg)
+	if err != nil {
+		util.WriteError(w, r, err, http.StatusInternalServerError)
+		return
+	}
+
+	pgResponse := repoDto.Pg{
+		ID:      updatedPg.ID,
+		Version: updatedPg.Version,
+		Status:  db.PgStatus(updatedPg.Status),
+		Output:  updatedPg.Output,
+	}
+
+	poolResponse := repoDto.Pool{
+		ID:       repoDetail.Pool.ID,
+		Type:     repoDetail.Pool.PoolType,
+		SizeInMb: repoDetail.Pool.SizeInMb,
+		Path:     repoDetail.Pool.Path,
+	}
+
+	repoResponse := repoDto.Response{
+		ID:        repoDetail.Repo.ID,
+		Name:      repoDetail.Repo.Name,
+		Pool:      poolResponse,
+		Pg:        pgResponse,
+		CreatedAt: repoDetail.Repo.CreatedAt,
+		UpdatedAt: repoDetail.Repo.UpdatedAt,
 	}
 
 	response := dto.Response[repoDto.Response]{
@@ -352,7 +590,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = repo.DeleteRepo(r.Context(), repoDetail.Repo, repoDetail.Pool)
+	err = repo.DeleteRepo(r.Context(), repoDetail.Repo, repoDetail.Pool, repoDetail.Pg)
 	if err != nil {
 		util.WriteError(
 			w,
@@ -372,40 +610,43 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 	util.WriteResponse(w, r, response, http.StatusOK)
 }
 
-func getRepoResponse(repo db.RepoDetail) repoDto.Response {
+func getRepoResponse(repoDetail db.RepoDetail) repoDto.Response {
 	var pgInfo repoDto.Pg
 	branchesInfo := []repoDto.Branch{}
 
 	pgInfo = repoDto.Pg{
-		ID:      repo.Pg.ID,
-		Version: repo.Pg.Version,
-		Status:  repo.Pg.Status,
-		Output:  repo.Pg.Output,
+		ID:      repoDetail.Pg.ID,
+		Version: repoDetail.Pg.Version,
+		Status:  db.PgStatus(repoDetail.Pg.Status),
+		Output:  repoDetail.Pg.Output,
 	}
 
 	poolInfo := repoDto.Pool{
-		ID:       repo.Pool.ID,
-		Type:     repo.Pool.PoolType,
-		Path:     repo.Pool.Path,
-		SizeInMb: repo.Pool.SizeInMb,
+		ID:       repoDetail.Pool.ID,
+		Type:     repoDetail.Pool.PoolType,
+		Path:     repoDetail.Pool.Path,
+		SizeInMb: repoDetail.Pool.SizeInMb,
 	}
 
-	for _, branch := range repo.Branches {
+	for _, branch := range repoDetail.Branches {
 		branchesInfo = append(branchesInfo, repoDto.Branch{
 			ID:       branch.ID,
 			Name:     branch.Name,
+			Status:   db.BranchStatus(branch.Status),
+			PgStatus: db.BranchPgStatus(branch.PgStatus),
+			Port:     branch.PgPort,
 			ParentID: branch.ParentID,
 		})
 	}
 
 	repoResponse := repoDto.Response{
-		ID:        repo.Repo.ID,
-		Name:      repo.Repo.Name,
+		ID:        repoDetail.Repo.ID,
+		Name:      repoDetail.Repo.Name,
 		Pg:        pgInfo,
 		Branches:  branchesInfo,
 		Pool:      poolInfo,
-		CreatedAt: repo.Repo.CreatedAt,
-		UpdatedAt: repo.Repo.UpdatedAt,
+		CreatedAt: repoDetail.Repo.CreatedAt,
+		UpdatedAt: repoDetail.Repo.UpdatedAt,
 	}
 	return repoResponse
 }

@@ -1,6 +1,8 @@
 import {RepoType} from "@/@types/repo/repo-init-dto.ts";
 
 export type PgStatus = "COMPLETED" | "STARTED" | "FAILED";
+export type BranchStatus = "OPEN" | "MERGED" | "CLOSED";
+export type BranchPgStatus = "RUNNING" | "STOPPED" | "FAILED";
 
 interface Pg {
     id: number;
@@ -19,6 +21,9 @@ interface Pool {
 interface Branch {
     id: number;
     name: string;
+    status: BranchStatus;
+    pgStatus: BranchPgStatus;
+    port: number;
     parentId: number;
     createdAt: Date;
 }

@@ -12,6 +12,8 @@ import (
 )
 
 func ValidateLocalPg(w http.ResponseWriter, r *http.Request) {
+	log.Info("Starting validation of local pg")
+
 	var pgInit pgDto.LocalImportReqDto
 	if err := json.NewDecoder(r.Body).Decode(&pgInit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)
@@ -49,6 +51,8 @@ func ValidateLocalPg(w http.ResponseWriter, r *http.Request) {
 }
 
 func ValidateHostPg(w http.ResponseWriter, r *http.Request) {
+	log.Info("Starting validation of host pg")
+
 	var pgInit pgDto.HostImportReqDto
 	if err := json.NewDecoder(r.Body).Decode(&pgInit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)

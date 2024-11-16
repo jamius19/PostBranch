@@ -22,7 +22,7 @@ func EmptyDataset(ctx context.Context, pool model.ZfsPool, name string) (model.Z
 
 	// Save dataset in db
 	dataset := model.ZfsDataset{
-		Name:   datasetName,
+		Name:   name,
 		PoolID: *pool.ID,
 	}
 

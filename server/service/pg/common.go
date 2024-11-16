@@ -1,27 +1,30 @@
 package pg
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/jamius19/postbranch/cmd"
+	"github.com/jamius19/postbranch/db"
 	"github.com/jamius19/postbranch/logger"
 	"github.com/jamius19/postbranch/util"
+	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
 )
 
 const (
-	Started   = "STARTED"
-	Completed = "COMPLETED"
-	Failed    = "FAILED"
+	PostBranchUser = "postbranch"
+	MaxConnection  = 20
 
 	ClusterSizeQuery    = "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
 	VersionQuery        = "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
 	SuperUserCheckQuery = `SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER;`
-
-	ConfigFilePathQuery = `SHOW config_file;`
-	HbaFilePathQuery    = `SHOW hba_file;`
-	IdentFilePathQuery  = `SHOW ident_file;`
 
 	// LocalReplicationCheckQuery TODO: Fix potential sql injection
 	LocalReplicationCheckQuery = `SELECT CASE 
@@ -82,7 +85,7 @@ func Single(auth HostAuthInfo, query string) (string, error) {
 	}
 	defer cleanup()
 
-	for rows.Next() {
+	if rows.Next() {
 		err := rows.Scan(&result)
 		if err != nil {
 			return "", fmt.Errorf("failed to scan postgres. error: %v", err)
@@ -96,9 +99,8 @@ func SingleLocal(pgOsUser, pgPath, query string) (string, error) {
 	var result string
 
 	output, err := GetPsqlCommand(pgOsUser, pgPath, query)
-	result = util.TrimmedString(output)
 
-	if err != nil || result == cmd.EmptyOutput {
+	if err != nil || output == cmd.EmptyOutput {
 		return "", fmt.Errorf("failed to scan postgres. error: %v", err)
 	}
 
@@ -172,7 +174,7 @@ func RemovePgPassFile() error {
 	return nil
 }
 
-func GetPsqlCommand(pgOsUser, pgPath, query string) (*string, error) {
+func GetPsqlCommand(pgOsUser, pgPath, query string) (string, error) {
 	return cmd.Single(
 		"pg-version-check",
 		false,
@@ -186,4 +188,256 @@ func GetPsqlCommand(pgOsUser, pgPath, query string) (*string, error) {
 		"-w",
 		"-c", query,
 	)
+}
+
+// StartPgAndUpdateBranch is potentially expensive. It SHOULD always be called as/inside a goroutine.
+func StartPgAndUpdateBranch(
+	ctx context.Context,
+	pgPath,
+	mountPath,
+	datasetName string,
+	datasetId int32,
+	wg *sync.WaitGroup,
+) {
+
+	defer wg.Done()
+
+	status, err := StartPg(pgPath, mountPath, datasetName)
+	if err != nil || status == db.BranchPgStopped {
+		log.Errorf("Failed to start postgres for datasetName: %s, error: %v", datasetName, err)
+		return
+	}
+
+	log.Infof("Started Postgres for datasetName: %s", datasetName)
+
+	if err := db.UpdateBranchPgStatus(ctx, datasetId, status); err != nil {
+		log.Errorf("Failed to update branch postgres info for datasetName: %s, error: %v", datasetName, err)
+		return
+	}
+}
+
+// StopPgAndUpdateBranch is potentially expensive. It SHOULD always be called as/inside a goroutine.
+func StopPgAndUpdateBranch(
+	ctx context.Context,
+	pgPath,
+	mountPath,
+	datasetName string,
+	datasetId int32,
+	wg *sync.WaitGroup,
+) {
+
+	defer wg.Done()
+
+	err := StopPg(pgPath, mountPath, datasetName, false)
+	if err != nil {
+		log.Errorf("Failed to start postgres for datasetName: %s, error: %v", datasetName, err)
+		return
+	}
+
+	log.Infof("Stopped Postgres for datasetName: %s", datasetName)
+
+	if err := db.UpdateBranchPgStatus(ctx, datasetId, db.BranchPgStopped); err != nil {
+		log.Errorf("Failed to update branch postgres info for datasetName: %s, error: %v", datasetName, err)
+		return
+	}
+}
+
+func StopDangingPg(pgPath, mountPath, datasetName string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	err := StopPg(pgPath, mountPath, datasetName, true)
+	if err != nil {
+		log.Infof("No dangling postgres found for dataset: %v", datasetName)
+	}
+}
+
+// StartPg is potentially expensive. It SHOULD always be called as/inside a goroutine.
+func StartPg(pgPath, mountPath, datasetName string) (db.BranchPgStatus, error) {
+	log.Infof("Starting Postgres for dataset: %v with postgres path: %v and mount path: %v", datasetName, pgPath, mountPath)
+
+	mainDatasetPath := filepath.Join(mountPath, datasetName, "data")
+
+	if _, err := os.Stat(filepath.Join(mainDatasetPath, "postmaster.pid")); err == nil {
+		log.Warnf("postmaster.pid file exists in the db cluster. deleting it")
+
+		if err := cleanPidFile(mainDatasetPath); err != nil {
+			return "", err
+		}
+	}
+
+	logPath := filepath.Join(mountPath, datasetName, "logs", "postgres_start.log")
+	pgCtlPath := filepath.Join(pgPath, "bin", "pg_ctl")
+
+	output, err := cmd.Single(
+		"starting-postgres",
+		false,
+		false,
+		"sudo",
+		"-u", PostBranchUser,
+		pgCtlPath,
+		"start",
+		"-l", logPath,
+		"-D", mainDatasetPath,
+	)
+
+	outputString := strings.Replace(output, "\n", "\\\\", -1)
+
+	if err != nil {
+		log.Errorf("Failed to start postgres. output: %s data: %v", outputString, err)
+		return "", err
+	}
+
+	log.Infof("Started postgres. output: %s", outputString)
+
+	status, err := getPgStatus(pgPath, mainDatasetPath, false)
+	if err != nil {
+		return "", err
+	}
+
+	// As we just started the postgres, we expect the status to be running
+	if status == db.BranchPgStopped {
+		return db.BranchPgFailed, nil
+	}
+
+	log.Infof("Postgres is ready. status: %s", status)
+	return status, nil
+}
+
+// StopPg is potentially expensive. It SHOULD always be called as/inside a goroutine.
+func StopPg(pgPath, mountPath, datasetName string, skipLog bool) error {
+	if !skipLog {
+		log.Infof("Stopping Postgres for dataset: %v with postgres path: %v and mount path: %v", datasetName, pgPath, mountPath)
+	}
+
+	mainDatasetPath := filepath.Join(mountPath, datasetName, "data")
+
+	status, err := getPgStatus(pgPath, mainDatasetPath, skipLog)
+	if err != nil {
+		return err
+	}
+
+	if status == db.BranchPgStopped {
+		log.Infof("Postgres is already stopped for dataset: %v", datasetName)
+		return nil
+	}
+
+	//logPath := filepath.Join(mountPath, datasetName, "logs", "postgres_start.log")
+	pgCtlPath := filepath.Join(pgPath, "bin", "pg_ctl")
+
+	output, err := cmd.Single(
+		"stop-postgres",
+		skipLog,
+		false,
+		"sudo",
+		"-u", PostBranchUser,
+		pgCtlPath,
+		"stop",
+		"-D", mainDatasetPath,
+	)
+
+	if err != nil {
+		if !skipLog {
+			log.Errorf("Failed to stop postgres. output: %s data: %v", output, err)
+		}
+
+		return err
+	}
+
+	if skipLog {
+		log.Infof("Stopped postgres. output: %s", output)
+	}
+
+	return nil
+}
+
+func getPgStatus(pgPath, mainDatasetPath string, skipLog bool) (db.BranchPgStatus, error) {
+	pgCtlPath := filepath.Join(pgPath, "bin", "pg_ctl")
+
+	pgCtlCmd := exec.Command(
+		"sudo",
+		"-u", PostBranchUser,
+		pgCtlPath,
+		"status", "-D",
+		mainDatasetPath,
+	)
+
+	pgCtlCmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+
+	output, err := pgCtlCmd.CombinedOutput()
+	outputStr := strings.Replace(string(output), "\n", "\\\\", -1)
+
+	if err == nil {
+		return db.BranchPgRunning, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		// Exit code 3 means that postgres is not running
+		// See https://www.postgresql.org/docs/current/app-pg-ctl.html
+		if exitErr.ExitCode() == 3 {
+			return db.BranchPgStopped, nil
+		}
+	}
+
+	// All other cases, it's an error
+	if !skipLog {
+		log.Errorf("Failed to run pg_ctl status. output: %s, error: %v", outputStr, err)
+	}
+
+	return "", err
+}
+
+func ValidatePgPath(pgPath string) error {
+	pgBaseBackupPath := filepath.Join(pgPath, "bin", "pg_basebackup")
+	postgresPath := filepath.Join(pgPath, "bin", "postgres")
+	pgCtlPath := filepath.Join(pgPath, "bin", "pg_ctl")
+
+	if _, err := os.Stat(pgBaseBackupPath); errors.Is(err, os.ErrNotExist) {
+		return responseerror.From("Invalid Postgres path, pg_basebackup not found")
+	}
+
+	if _, err := os.Stat(postgresPath); errors.Is(err, os.ErrNotExist) {
+		return responseerror.From("Invalid Postgres path, postgres not found")
+	}
+
+	if _, err := os.Stat(pgCtlPath); errors.Is(err, os.ErrNotExist) {
+		return responseerror.From("Invalid Postgres path, pg_ctl not found")
+	}
+
+	return nil
+}
+
+func CleanupConfig(mainDatasetPath string) error {
+	if err := util.RemoveFile(filepath.Join(mainDatasetPath, "postgresql.conf")); err != nil {
+		log.Errorf("Failed to remove postgresql.conf")
+		return err
+	}
+
+	if err := util.RemoveFile(filepath.Join(mainDatasetPath, "pg_hba.conf")); err != nil {
+		log.Errorf("Failed to remove pg_hba.conf")
+		return err
+	}
+
+	if err := util.RemoveFile(filepath.Join(mainDatasetPath, "pg_ident.conf")); err != nil {
+		log.Errorf("Failed to remove pg_ident.conf")
+		return err
+	}
+
+	if err := cleanPidFile(mainDatasetPath); err != nil {
+		log.Errorf("Failed to remove postmaster.pid")
+		return err
+	}
+
+	return nil
+}
+
+func cleanPidFile(mainDatasetPath string) error {
+	if err := util.RemoveFile(filepath.Join(mainDatasetPath, "postmaster.pid")); err != nil {
+		log.Errorf("Failed to remove postmaster.pid")
+		return err
+	}
+
+	return nil
 }

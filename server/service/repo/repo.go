@@ -8,6 +8,7 @@ import (
 	"github.com/jamius19/postbranch/db/gen/model"
 	repoDto "github.com/jamius19/postbranch/dto/repo"
 	"github.com/jamius19/postbranch/logger"
+	pgSvc "github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/service/zfs"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
@@ -49,10 +50,21 @@ func InitializeRepo(ctx context.Context, repoInit repoDto.Info) (model.Repo, mod
 	return model.Repo{}, model.ZfsPool{}, fmt.Errorf("not implemented yet")
 }
 
-func DeleteRepo(ctx context.Context, repo model.Repo, pool model.ZfsPool) error {
+func DeleteRepo(ctx context.Context, repo model.Repo, pool model.ZfsPool, pg model.Pg) error {
 	log.Infof("Deleting repo: %v, pool: %v", repo, pool)
 
 	// TODO: Stop postgres
+	datasets, err := db.ListDatasetByNameAndPoolId(ctx, *pool.ID)
+	if err != nil {
+		return err
+	}
+
+	for _, dataset := range datasets {
+		if err := pgSvc.StopPg(pg.PgPath, pool.MountPath, dataset.Name, false); err != nil {
+			return err
+		}
+	}
+	//pgSvc.StopPg(pg.PgPath, pool.MountPath)
 
 	loopbackPath, err := zfs.FindDevicePath(pool)
 	if err != nil {

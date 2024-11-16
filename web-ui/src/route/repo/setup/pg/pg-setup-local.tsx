@@ -26,31 +26,31 @@ import {validatePg} from "@/service/repo-service.ts";
 import React, {JSX, useCallback} from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Check, Info} from "lucide-react";
-import Link from "@/components/Link.tsx";
-import {formatValue} from "@/util/lib.ts";
+import {Check} from "lucide-react";
 import {PgLocalInitDto} from "@/@types/repo/pg/pg-local-init-dto.ts";
+import usePgAdapterState from "@/lib/hooks/use-pg-adapter-state.tsx";
+import DbClusterInfo from "@/components/db-cluster-info.tsx";
 
 const formSchema = z.object({
     version: z.number()
-        .min(15, "Minimum supported PostgreSQL version is 15")
-        .max(17, "Maximum supported PostgreSQL version is 17"),
+        .min(15, "Minimum supported Postgres version is 15")
+        .max(17, "Maximum supported Postgres version is 17"),
     postgresPath: z.string()
-        .min(1, "PostgreSQL path is required")
+        .min(1, "Postgres path is required")
         .refine(value => !value.includes(" "), {
-            message: "PostgreSQL path must not contain spaces",
+            message: "Postgres path must not contain spaces",
         })
         .refine(value => value.startsWith("/") && !value.endsWith("/"), {
-            message: "PostgreSQL Path must start with '/' and not end with '/'",
+            message: "Postgres Path must start with '/' and not end with '/'",
         }),
     stopPostgres: z.boolean({message: "Required"}),
     postgresOsUser: z.string()
-        .min(1, "PostgreSQL OS user is required")
+        .min(1, "Postgres OS user is required")
         .regex(/^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$/, {
-            message: "PostgreSQL OS user must be a valid Unix username",
+            message: "Postgres OS user must be a valid Unix username",
         })
         .refine(value => !value.includes(" "), {
-            message: "PostgreSQL OS user must not contain spaces",
+            message: "Postgres OS user must not contain spaces",
         }),
 });
 
@@ -62,15 +62,12 @@ const defaultValues: PgLocalInitDto = {
 };
 
 const PgSetupLocal = (): JSX.Element => {
-    // const {repoId: repoIdStr} = useParams<{ repoId: string }>();
-    // const repoId = parseInt(repoIdStr!);
-
     const pgValidate = useNotifiableMutation({
         mutationKey: ["pg-import-local"],
         mutationFn: (pgInit: PgLocalInitDto) => validatePg(pgInit, "local"),
         messages: {
-            pending: "Checking PostgreSQL configuration",
-            success: "PostgreSQL configuration is valid",
+            pending: "Checking Postgres configuration",
+            success: "Postgres configuration is valid",
         },
         invalidates: ["repo-list", "repo"],
     });
@@ -79,6 +76,8 @@ const PgSetupLocal = (): JSX.Element => {
         defaultValues: defaultValues,
         resolver: zodResolver(formSchema),
     });
+
+    const [Nav] = usePgAdapterState("local");
 
     const onSubmit = useCallback(async (pgInit: PgLocalInitDto) => {
         await pgValidate.mutateAsync(pgInit);
@@ -103,7 +102,7 @@ const PgSetupLocal = (): JSX.Element => {
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            <BreadcrumbPage>Configure PostgreSQL</BreadcrumbPage>
+                            <BreadcrumbPage>Configure Postgres</BreadcrumbPage>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
@@ -114,7 +113,7 @@ const PgSetupLocal = (): JSX.Element => {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <h1 className={"mb-10"}>PostgreSQL Connection</h1>
+            <h1 className={"mb-10"}>Postgres Connection</h1>
 
             <Form {...pgForm}>
                 <form
@@ -146,7 +145,7 @@ const PgSetupLocal = (): JSX.Element => {
                                     </SelectContent>
                                 </Select>
                                 <FormDescription>
-                                    Select the version of PostgreSQL
+                                    Select the version of Postgres
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -158,7 +157,7 @@ const PgSetupLocal = (): JSX.Element => {
                         name="postgresPath"
                         render={({field}) => (
                             <FormItem>
-                                <FormLabel>Postgres Installation Path</FormLabel>
+                                <FormLabel>Local Postgres Installation Path</FormLabel>
                                 <FormControl>
                                     <Input {...field}
                                            disabled={repoInitPending || repoInitSuccess}
@@ -170,7 +169,7 @@ const PgSetupLocal = (): JSX.Element => {
                                            }}/>
                                 </FormControl>
                                 <FormDescription>
-                                    Absolute path to PostgreSQL installation
+                                    Absolute path to Postgres installation
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -191,7 +190,7 @@ const PgSetupLocal = (): JSX.Element => {
                                 </FormControl>
                                 <div className="space-y-1 leading-none">
                                     <FormLabel>
-                                        Stop Current PostgreSQL after importing data (Recommended)
+                                        Stop Current Postgres after importing data (Recommended)
                                     </FormLabel>
                                     <FormDescription className={"leading-5"} style={{marginTop: "0.4rem"}}>
                                         PostBranch will automatically start Postgres with identical data after importing
@@ -221,7 +220,7 @@ const PgSetupLocal = (): JSX.Element => {
                                            }}/>
                                 </FormControl>
                                 <FormDescription>
-                                    Username of the Local PostgreSQL operating system account.<br/>
+                                    Username of the Local Postgres operating system account.<br/>
                                     If you&#39;re unsure, use the default value <code
                                     className={"font-bold"}>postgres</code><br/>
                                     <i>
@@ -235,15 +234,7 @@ const PgSetupLocal = (): JSX.Element => {
                     />
 
                     {repoInitSuccess && (
-                        <div
-                            className={"flex items-center gap-2 bg-lime-200/70 text-xs text-lime-700 rounded-md px-4 py-3"}>
-                            <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
-
-                            <p>
-                                <b>Connection successful! The database cluster size
-                                    is {formatValue(pgValidate.data.data!.clusterSizeInMb)}</b>.
-                            </p>
-                        </div>
+                        <DbClusterInfo clusterSizeInMb={pgValidate.data.data!.clusterSizeInMb}/>
                     )}
 
                     <div className={"flex gap-4"}>
@@ -252,19 +243,12 @@ const PgSetupLocal = (): JSX.Element => {
                             variant={repoInitSuccess ? "success" : "default"}
                             disabled={repoInitPending || repoInitSuccess}>
 
-                            <Spinner isLoading={repoInitPending}/>
+                            <Spinner isLoading={repoInitPending} light/>
                             {repoInitSuccess && <Check/>}
                             {repoInitSuccess ? "Connected" : "Connect"}
                         </Button>
 
-                        {repoInitSuccess && (
-                            <Link to={"/repo/setup/storage"}
-                                  state={{pgConfig: pgValidate.data.data!, adapter: "local"}}>
-                                <Button>
-                                    Storage Configuration <ArrowRight/>
-                                </Button>
-                            </Link>
-                        )}
+                        {repoInitSuccess && <Nav pgResponse={pgValidate.data.data!}/>}
                     </div>
                 </form>
             </Form>

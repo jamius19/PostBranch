@@ -22,6 +22,16 @@ export const isInteger = (str?: string): boolean => {
     return Number.isInteger(str ? +str : undefined);
 }
 
+export function scrollToElement(element: HTMLElement, offset = 0) {
+    const elementPosition = element.getBoundingClientRect().top + window.scrollY;
+    const offsetPosition = elementPosition - offset;
+
+    window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth",
+    });
+}
+
 export const formatValue = (megabytes: number, shortUnitForm = false): string => {
     let val: number;
     let unitSuffix: string;

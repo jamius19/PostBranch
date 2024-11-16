@@ -18,9 +18,12 @@ func routes(r *chi.Mux) {
 			})
 
 			// Adapters for different pg sources
-			r.Route("/init", func(r chi.Router) {
+			r.Route("/import", func(r chi.Router) {
 				r.Post("/local", route.InitializeLocalRepo)
+				r.Post("/{repoId}/local", route.ReInitializeLocalPg)
+
 				r.Post("/host", route.InitializeHostRepo)
+				r.Post("/{repoId}/host", route.ReInitializeHostPg)
 			})
 
 			r.Delete("/{repoId}", route.DeleteRepo)

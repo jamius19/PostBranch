@@ -18,6 +18,7 @@ func Middlewares(r *chi.Mux, rootCtx context.Context) {
 		MaxAge:           300,
 	}))
 
+	r.Use(middleware.StripSlashes)
 	r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: logger.Logger}))
 	r.Use(shutdownContext(rootCtx))
 	r.Use(requestError)

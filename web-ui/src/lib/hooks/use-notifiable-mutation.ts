@@ -4,14 +4,16 @@ import {toast} from "react-toastify";
 import {ToastContentProps} from "react-toastify/dist/types";
 import {getRandomInt} from "@/util/lib.ts";
 
+type UseNotifiableMutationReturn = {
+    messages?: {
+        pending?: string;
+        success?: string;
+    },
+    invalidates?: string[],
+};
+
 export const useNotifiableMutation = <TData, TError, TVariables>(
-    options: UseMutationOptions<TData, TError, TVariables> & {
-        messages?: {
-            pending?: string;
-            success?: string;
-        },
-        invalidates?: string[],
-    }
+    options: UseMutationOptions<TData, TError, TVariables> & UseNotifiableMutationReturn
 ) => {
     const queryClient = useQueryClient();
 

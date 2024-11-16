@@ -39,6 +39,18 @@ const router = createBrowserRouter([
                 element: <PgSetupHost/>,
             },
             {
+                path: "/repo/setup/:repoId/postgres",
+                element: <PgImportMode/>,
+            },
+            {
+                path: "/repo/setup/postgres/:repoId/local",
+                element: <PgSetupLocal/>,
+            },
+            {
+                path: "/repo/setup/postgres/:repoId/host",
+                element: <PgSetupHost/>,
+            },
+            {
                 path: "error",
                 element: <Error/>
             }

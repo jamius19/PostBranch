@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import {ArrowRight, Monitor, Network} from "lucide-react";
-import {PgAdapterNames} from "@/@types/repo/pg/pg-response-dto.ts";
+import {PgAdapterName} from "@/@types/repo/pg/pg-response-dto.ts";
 import {twMerge as tm} from "tailwind-merge";
 import Link from "@/components/Link.tsx";
 import {Button} from "@/components/ui/button.tsx";
@@ -13,12 +13,25 @@ import {
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
 import {Badge} from "@/components/ui/badge.tsx";
+import {useParams} from "react-router-dom";
 
 const SelectedBgClass = "border border-gray-700 bg-gray-700 text-white shadow-gray-200 shadow-lg";
 const NormalBgClass = "border border-gray-300 hover:bg-gray-100/80";
 
+
 const PgImportMode = () => {
-    const [selectedType, setSelectedType] = useState<PgAdapterNames | undefined>();
+    const {repoId: repoIdStr} = useParams<{ repoId?: string }>();
+    const repoId = parseInt(repoIdStr ?? "-1");
+
+    const [selectedType, setSelectedType] = useState<PgAdapterName | undefined>();
+
+    const getNextLink = () => {
+        if (repoId === -1) {
+            return `/repo/setup/postgres/${selectedType}`;
+        } else {
+            return `/repo/setup/postgres/${repoId}/${selectedType}`;
+        }
+    }
 
     return (
         <div>
@@ -32,7 +45,7 @@ const PgImportMode = () => {
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            Configure PostgreSQL
+                            Configure Postgres
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
@@ -47,7 +60,7 @@ const PgImportMode = () => {
             <h1 className={"mb-10"}>Connection Type</h1>
 
             <p className={"mb-8 text-sm"}>
-                Choose what type of connection will be used to connect with your PostgreSQL instance.<br/>
+                Choose what type of connection will be used to connect with your Postgres instance.<br/>
                 PostBranch will import the data from there into the repository.
             </p>
 
@@ -61,7 +74,7 @@ const PgImportMode = () => {
                     <div>
                         <p className={"font-bold"}>Local Connection</p>
                         <p className={"text-sm mt-2.5"}>
-                            Choose this if your PostgreSQL server is running on the same machine as PostBranch, and you
+                            Choose this if your Postgres server is running on the same machine as PostBranch, and you
                             can connect via <code className={"font-bold"}>peer</code> or <code
                             className={"font-bold"}>trust</code> based
                             authentication with operating system user
@@ -81,7 +94,7 @@ const PgImportMode = () => {
                             <Badge className={"bg-blue-600"}>Recommended</Badge>
                         </div>
                         <p className={"text-sm mt-2.5"}>
-                            Choose this if your PostgreSQL server is running on a remote
+                            Choose this if your Postgres server is running on a remote
                             machine or you want to connect via <code className={"font-bold"}>host</code> based
                             authentication with username, and password
                         </p>
@@ -89,9 +102,9 @@ const PgImportMode = () => {
                 </div>
             </div>
 
-            <Link disabled={!selectedType} to={`/repo/setup/postgres/${selectedType}`} className={"mt-10 block"}>
+            <Link disabled={!selectedType} to={getNextLink()} className={"mt-10 block"}>
                 <Button disabled={!selectedType}>
-                    Configure PostgreSQL <ArrowRight/>
+                    Configure Postgres <ArrowRight/>
                 </Button>
             </Link>
         </div>

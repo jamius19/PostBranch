@@ -14,7 +14,6 @@ import (
 )
 
 var log = logger.Logger
-var webWg = sync.WaitGroup{}
 
 func main() {
 	if os.Geteuid() != 0 {
@@ -45,9 +44,14 @@ func main() {
 	closeDb := db.Initialize()
 	defer closeDb()
 
+	var webWg = sync.WaitGroup{}
+	webWg.Add(1)
+
 	go web.Initialize(rootCtx, &webWg)
 
 	<-stop
 	rootCancel()
+	
+	log.Info("Received interrupt/terminate signal, shutting down...")
 	webWg.Wait()
 }

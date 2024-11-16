@@ -2,7 +2,6 @@ package local
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/db"
@@ -13,9 +12,8 @@ import (
 	pgSvc "github.com/jamius19/postbranch/service/pg"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
-	_ "github.com/lib/pq"
-	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -25,28 +23,23 @@ const errMsg = "Can't connect to PostgreSQL. Is it running and is the provided c
 var log = logger.Logger
 
 func Validate(pgInit pg.LocalImportReqDto) error {
-	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
-	if _, err := os.Stat(pgBaseBackupPath); errors.Is(err, os.ErrNotExist) {
-		return responseerror.From("Invalid Postgres path, please check the path")
-	}
-
-	err := checkOsUser(pgInit.PostgresOsUser)
-	if err != nil {
+	if err := pgSvc.ValidatePgPath(pgInit.PostgresPath); err != nil {
 		return err
 	}
 
-	err = checkPgVersion(pgInit)
-	if err != nil {
+	if err := checkOsUser(pgInit.PostgresOsUser); err != nil {
 		return err
 	}
 
-	err = checkPgSuperuser(pgInit)
-	if err != nil {
+	if err := checkPgVersion(pgInit); err != nil {
 		return err
 	}
 
-	err = checkPgReplication(pgInit)
-	if err != nil {
+	if err := checkPgSuperuser(pgInit); err != nil {
+		return err
+	}
+
+	if err := checkPgReplication(pgInit); err != nil {
 		return err
 	}
 
@@ -55,16 +48,14 @@ func Validate(pgInit pg.LocalImportReqDto) error {
 
 func Import(
 	ctx context.Context,
-	repoInit repo.InitDto[pg.LocalImportReqDto],
+	pgConfig pg.LocalImportReqDto,
 	repoInfo model.Repo,
 	pool model.ZfsPool,
 	pgInfo *model.Pg,
 ) (model.Pg, error) {
 
-	pgConfig := repoInit.PgConfig
-
 	// Get the main dataset for importing Postgres data
-	dataset, err := db.GetDatasetByName(ctx, pool.Name+"/main")
+	dataset, err := db.GetDatasetByNameAndPoolId(ctx, "main", *pool.ID)
 	if err != nil {
 		log.Errorf("Dataset not found for repo: %v and pool: %v", repo.MinSizeInMb, pool)
 		return model.Pg{}, responseerror.From("Associated Dataset not found")
@@ -75,7 +66,7 @@ func Import(
 		return model.Pg{}, err
 	}
 
-	go copyPostgresData(pgConfig, repoInfo, pool, dataset, &createdPg)
+	go copyPostgresData(pgConfig, repoInfo, pool, dataset, createdPg)
 
 	return createdPg, nil
 }
@@ -181,7 +172,8 @@ func insertPgEntry(
 		pgUpdateParams := model.Pg{
 			PgPath:  pgInit.PostgresPath,
 			Version: pgInit.Version,
-			Status:  pgSvc.Started,
+			Adapter: "local",
+			Status:  string(db.PgStarted),
 			ID:      pgInfo.ID,
 		}
 
@@ -191,7 +183,8 @@ func insertPgEntry(
 		pgParams := model.Pg{
 			PgPath:  pgInit.PostgresPath,
 			Version: pgInit.Version,
-			Status:  pgSvc.Started,
+			Adapter: "local",
+			Status:  string(db.PgStarted),
 			RepoID:  *repo.ID,
 		}
 
@@ -207,53 +200,29 @@ func insertPgEntry(
 	return createdPg, nil
 }
 
-//func getConfFilePath(pgInit *pg.LocalImportReqDto) (string, error) {
-//	output, err := pgSvc.Single(pgInit, ConfigFilePathQuery)
-//	if err != nil {
-//		log.Errorf("Failed to query Postgres config file, output: %v error: %v", output, err)
-//		return "", fmt.Errorf("failed to query Postgres config file. error: %v", err)
-//	}
-//
-//	return output, nil
-//}
-//
-//func getHbaFilePath(pgInit *pg.LocalImportReqDto) (string, error) {
-//	output, err := pgSvc.Single(pgInit, HbaFilePathQuery)
-//	if err != nil {
-//		log.Errorf("Failed to query Postgres hba file, output: %v error: %v", output, err)
-//		return "", fmt.Errorf("failed to query Postgres hba file. error: %v", err)
-//	}
-//
-//	return output, nil
-//}
-//
-//func getIdentFilePath(pgInit *pg.LocalImportReqDto) (string, error) {
-//	output, err := pgSvc.Single(pgInit, IdentFilePathQuery)
-//	if err != nil {
-//		log.Errorf("Failed to query Postgres ident file, output: %v error: %v", output, err)
-//		return "", fmt.Errorf("failed to query Postgres ident file. error: %v", err)
-//	}
-//
-//	return output, nil
-//}
-
 func copyPostgresData(
 	pgInit pg.LocalImportReqDto,
 	repo model.Repo,
 	pool model.ZfsPool,
 	dataset model.ZfsDataset,
-	pgInstance *model.Pg,
+	pgInfo model.Pg,
 ) {
 
 	log.Info("Started copying Local Postgres data to ZFS Dataset")
 	log.Infof("Repo: %v", repo)
 	log.Infof("Pool: %v", pool)
 	log.Infof("Dataset: %v", dataset)
-	log.Infof("Pg: %v", pgInstance)
+	log.Infof("Pg: %v", pgInfo)
 
 	ctx := context.Background()
-	pgBaseBackupPath := pgInit.PostgresPath + "/bin/pg_basebackup"
-	mainDatasetPath := pool.MountPath + "/main/data"
+	pgBaseBackupPath := filepath.Join(pgInit.PostgresPath, "bin", "pg_basebackup")
+	mainDatasetPath := filepath.Join(pool.MountPath, "main", "data")
+	logPath := filepath.Join(pool.MountPath, "main", "logs")
+
+	port, err := pgSvc.GetPgPort(ctx)
+	if err != nil {
+		return
+	}
 
 	// Cleaning the new dataset directory
 	if err := util.RemoveFile(mainDatasetPath); err != nil {
@@ -263,6 +232,11 @@ func copyPostgresData(
 
 	if err := util.CreateDirectories(mainDatasetPath, pgInit.PostgresOsUser, 0700); err != nil {
 		log.Errorf("Failed to create main dataset directory: %v", err)
+		return
+	}
+
+	if err := util.CreateDirectories(logPath, pgSvc.PostBranchUser, 0700); err != nil {
+		log.Errorf("Failed to create log directory: %v", err)
 		return
 	}
 
@@ -279,34 +253,56 @@ func copyPostgresData(
 	)
 
 	if err != nil {
-		log.Errorf("Failed to copy pg instance. output: %s data: %v", util.SafeStringVal(output), err)
+		log.Errorf("Failed to copy pg instance. output: %s data: %v", output, err)
 
-		updatedPg, err := db.UpdatePgStatus(ctx, *pgInstance.ID, pgSvc.Failed, util.SafeStringVal(output))
+		updatedPg, err := db.UpdatePgStatus(ctx, *pgInfo.ID, db.PgFailed, output)
 		if err != nil {
-			log.Errorf("Failed to update import status of pgInstance: %v", err)
+			log.Errorf("Failed to update import status of pgInfo: %v", err)
 		}
 
-		log.Infof("Updated import status of pgInstance: %v", updatedPg)
+		log.Infof("Updated import status of pgInfo: %v", updatedPg)
 
 		return
 	}
 
-	err = cleanupConfig(mainDatasetPath)
+	err = pgSvc.CleanupConfig(mainDatasetPath)
 	if err != nil {
+		return
+	}
+
+	if err := pgSvc.WritePostgresConfig(port, repo.Name, logPath, mainDatasetPath); err != nil {
+		return
+	}
+
+	// Set the permissions for the main dataset directory to PostBranch user
+	// as after the backup, the permissions are set to root
+	output, err = cmd.Single(
+		"change-dataset-permissions",
+		false,
+		false,
+		"chown",
+		fmt.Sprintf("-R %s:%s", pgSvc.PostBranchUser, pgSvc.PostBranchUser),
+		mainDatasetPath,
+	)
+
+	if err != nil {
+		log.Errorf("Failed to change dataset permissions. output: %s data: %v", output, err)
 		return
 	}
 
 	// Updating DB
-	updatedPg, err := db.UpdatePgStatus(ctx, *pgInstance.ID, pgSvc.Completed, util.SafeStringVal(output))
+	updatedPg, err := db.UpdatePgStatus(ctx, *pgInfo.ID, db.PgCompleted, output)
 	if err != nil {
-		log.Errorf("Failed to update import status of pgInstance: %v", err)
+		log.Errorf("Failed to update import status of pgInfo: %v", err)
 	}
-	log.Infof("Updated pgInstance: %v", updatedPg)
+	log.Infof("Updated pgInfo: %v", updatedPg)
 
 	branch := model.Branch{
 		Name:      "main",
+		PgPort:    port,
 		RepoID:    *repo.ID,
-		DatasetID: *dataset.ID,
+		DatasetID: dataset.ID,
+		Status:    string(db.BranchOpen),
 	}
 
 	branch, err = db.CreateBranch(ctx, branch)
@@ -316,23 +312,4 @@ func copyPostgresData(
 	}
 
 	log.Infof("Postgres backup successful for repo: %v", repo)
-}
-
-func cleanupConfig(mainDatasetPath string) error {
-	if err := util.RemoveFile(mainDatasetPath + "/postgresql.conf"); err != nil {
-		log.Errorf("Failed to remove postgresql.conf")
-		return err
-	}
-
-	if err := util.RemoveFile(mainDatasetPath + "/pg_hba.conf"); err != nil {
-		log.Errorf("Failed to remove pg_hba.conf")
-		return err
-	}
-
-	if err := util.RemoveFile(mainDatasetPath + "/pg_ident.conf"); err != nil {
-		log.Errorf("Failed to remove pg_ident.conf")
-		return err
-	}
-
-	return nil
 }

@@ -3,12 +3,10 @@ package zfs
 import (
 	"github.com/jamius19/postbranch/cmd"
 	"github.com/jamius19/postbranch/logger"
-	"github.com/jamius19/postbranch/util"
 	"strings"
 )
 
 const (
-	FindLoopBackCmd          = "losetup -a | grep '%s' | cut -d ':' -f 1"
 	FindLoopBackFromZpoolCmd = "zpool list -v %s | grep '^  loop' | awk '{print $1}'"
 )
 
@@ -20,13 +18,12 @@ func Version() (*string, bool) {
 	log.Info("Checking ZFS availability")
 
 	zfsOutput, err := cmd.Single("zfs-version-check", true, false, "zfs", "--version")
-	zfsVersion := util.TrimmedString(zfsOutput)
 
-	if err != nil || zfsVersion == cmd.EmptyOutput {
+	if err != nil || zfsOutput == cmd.EmptyOutput {
 		return nil, false
 	}
 
-	version := strings.Replace(zfsVersion, "\n", "/", -1)
+	version := strings.Replace(zfsOutput, "\n", "\\\\", -1)
 
 	logger.Logger.Infof("ZFS version: %s", version)
 	for _, v := range zfsVersions {

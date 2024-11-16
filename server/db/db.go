@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"github.com/jamius19/postbranch/logger"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 )
 

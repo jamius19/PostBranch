@@ -4,10 +4,10 @@ import {Input} from "@/components/ui/input";
 import {useController, UseControllerProps} from "react-hook-form";
 import {formatValue} from "@/util/lib.ts";
 
-export const MIN_VALUE = 300;
+export const MIN_VALUE = 512;
 
 const STEPS = [
-    256, 512, 768, 1024, 1536, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, // Up to 10 GB
+    512, 768, 1024, 1536, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, // Up to 10 GB
     12288, 14336, 16384, 20480, 24576, 28672, 32768, 40960, 49152, 57344, 65536,
     73728, 81920, 90112, 98304, // 10 GB to 96 GB in finer steps
     131072, 262144, 524288, 786432, 1048576, 1572864, 2097152 // Larger steps after 100 GB

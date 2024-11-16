@@ -24,23 +24,24 @@ import {zodResolver} from "@hookform/resolvers/zod";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import {validatePg} from "@/service/repo-service.ts";
-import React, {JSX, useCallback} from "react";
+import React, {JSX, useCallback, useEffect, useRef} from "react";
 import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Check, Info, SquareArrowOutUpRight} from "lucide-react";
-import Link from "@/components/Link.tsx";
-import {formatValue} from "@/util/lib.ts";
+import {Check, SquareArrowOutUpRight} from "lucide-react";
+import usePgAdapterState from "@/lib/hooks/use-pg-adapter-state.tsx";
+import DbClusterInfo from "@/components/db-cluster-info.tsx";
+import {scrollToElement} from "@/util/lib.ts";
 
 const formSchema = z.object({
     version: z.number()
-        .min(15, "Minimum supported PostgreSQL version is 15")
-        .max(17, "Maximum supported PostgreSQL version is 17"),
+        .min(15, "Minimum supported Postgres version is 15")
+        .max(17, "Maximum supported Postgres version is 17"),
     postgresPath: z.string()
-        .min(1, "PostgreSQL path is required")
+        .min(1, "Postgres path is required")
         .refine(value => !value.includes(" "), {
-            message: "PostgreSQL path must not contain spaces",
+            message: "Postgres path must not contain spaces",
         })
         .refine(value => value.startsWith("/") && !value.endsWith("/"), {
-            message: "PostgreSQL Path must start with '/' and not end with '/'",
+            message: "Postgres Path must start with '/' and not end with '/'",
         }),
     host: z.string()
         .min(1, "Database host is required")
@@ -71,15 +72,12 @@ const defaultValues: PgHostInitDto = {
 };
 
 const PgSetupHost = (): JSX.Element => {
-    // const {repoId: repoIdStr} = useParams<{ repoId: string }>();
-    // const repoId = parseInt(repoIdStr!);
-
     const pgValidate = useNotifiableMutation({
         mutationKey: ["pg-import"],
         mutationFn: (pgInit: PgHostInitDto) => validatePg(pgInit, "host"),
         messages: {
-            pending: "Checking PostgreSQL configuration",
-            success: "PostgreSQL configuration is valid",
+            pending: "Checking Postgres configuration",
+            success: "Postgres configuration is valid",
         },
         invalidates: ["repo-list", "repo"],
     });
@@ -89,9 +87,19 @@ const PgSetupHost = (): JSX.Element => {
         resolver: zodResolver(formSchema),
     });
 
+    const [Nav] = usePgAdapterState("host");
+
+    const submitBtnRef = useRef<HTMLButtonElement>(null);
+
     const onSubmit = useCallback(async (pgInit: PgHostInitDto) => {
         await pgValidate.mutateAsync(pgInit);
     }, [pgValidate]);
+
+    useEffect(() => {
+        if (pgValidate.isSuccess) {
+            scrollToElement(submitBtnRef.current!);
+        }
+    }, [pgValidate.isSuccess]);
 
 
     // if (!isInteger(repoIdStr)) {
@@ -113,7 +121,7 @@ const PgSetupHost = (): JSX.Element => {
                             <ChevronRightIcon/>
                         </BreadcrumbSeparator>
                         <BreadcrumbItem>
-                            <BreadcrumbPage>Configure PostgreSQL</BreadcrumbPage>
+                            <BreadcrumbPage>Configure Postgres</BreadcrumbPage>
                         </BreadcrumbItem>
                         <BreadcrumbSeparator>
                             <ChevronRightIcon/>
@@ -124,7 +132,7 @@ const PgSetupHost = (): JSX.Element => {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <h1 className={"mb-10"}>PostgreSQL Connection</h1>
+            <h1 className={"mb-10"}>Postgres Connection</h1>
 
             <Form {...pgForm}>
                 <form
@@ -156,7 +164,7 @@ const PgSetupHost = (): JSX.Element => {
                                     </SelectContent>
                                 </Select>
                                 <FormDescription>
-                                    Select the version of PostgreSQL
+                                    Select the version of Postgres
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -168,7 +176,7 @@ const PgSetupHost = (): JSX.Element => {
                         name="postgresPath"
                         render={({field}) => (
                             <FormItem>
-                                <FormLabel>Postgres Installation Path</FormLabel>
+                                <FormLabel>Local Postgres Installation Path</FormLabel>
                                 <FormControl>
                                     <Input {...field}
                                            disabled={repoInitPending || repoInitSuccess}
@@ -180,7 +188,7 @@ const PgSetupHost = (): JSX.Element => {
                                            }}/>
                                 </FormControl>
                                 <FormDescription>
-                                    Absolute path to PostgreSQL installation
+                                    Absolute path to Postgres installation
                                 </FormDescription>
                                 <FormMessage/>
                             </FormItem>
@@ -199,15 +207,11 @@ const PgSetupHost = (): JSX.Element => {
                                         <FormLabel>Host</FormLabel>
                                         <FormControl>
                                             <Input {...field}
-                                                   disabled={true}
-                                                   readOnly={true}
                                                    spellCheck="false"
                                                    placeholder="localhost"/>
                                         </FormControl>
                                         <FormDescription>
-                                            PostgreSQL server hostname, currently only <code
-                                            className={"font-bold"}>localhost</code> is
-                                            supported
+                                            Postgres server hostname
                                         </FormDescription>
                                         <FormMessage/>
                                     </FormItem>
@@ -231,7 +235,7 @@ const PgSetupHost = (): JSX.Element => {
                                                    }}/>
                                         </FormControl>
                                         <FormDescription>
-                                            PostgreSQL server port
+                                            Postgres server port
                                         </FormDescription>
                                         <FormMessage/>
                                     </FormItem>
@@ -264,7 +268,7 @@ const PgSetupHost = (): JSX.Element => {
                                         </SelectContent>
                                     </Select>
                                     <FormDescription>
-                                        Select the SSL Mode for connecting to PostgreSQL.
+                                        Select the SSL Mode for connecting to Postgres.
                                         Use the <code
                                         className={"font-bold"}>disable</code> mode if you&#39;re unsure.<br/>
                                         Learn more about it in the&nbsp;
@@ -296,7 +300,7 @@ const PgSetupHost = (): JSX.Element => {
                                                placeholder="postgres"/>
                                     </FormControl>
                                     <FormDescription>
-                                        PostgreSQL user name&nbsp;
+                                        Postgres user name&nbsp;
                                         <i>
                                             (This MUST be a <code
                                             className={"font-bold"}>superuser</code>)
@@ -320,7 +324,7 @@ const PgSetupHost = (): JSX.Element => {
                                                type="password"/>
                                     </FormControl>
                                     <FormDescription>
-                                        PostgreSQL user password <i>(This will NOT be saved)</i>
+                                        Postgres user password <i>(This will NOT be saved)</i>
                                     </FormDescription>
                                     <FormMessage/>
                                 </FormItem>
@@ -329,36 +333,22 @@ const PgSetupHost = (): JSX.Element => {
                     </>
 
                     {repoInitSuccess && (
-                        <div
-                            className={"flex items-center gap-2 bg-lime-200/70 text-xs text-lime-700 rounded-md px-4 py-3"}>
-                            <Info size={16} className={"relative bottom-[1px] flex-shrink-0"}/>
-
-                            <p>
-                                <b>Connection successful! The database cluster size
-                                    is {formatValue(pgValidate.data.data!.clusterSizeInMb)}</b>.
-                            </p>
-                        </div>
+                        <DbClusterInfo clusterSizeInMb={pgValidate.data.data!.clusterSizeInMb}/>
                     )}
 
                     <div className={"flex gap-4"}>
                         <Button
+                            ref={submitBtnRef}
                             type="submit"
                             variant={repoInitSuccess ? "success" : "default"}
                             disabled={repoInitPending || repoInitSuccess}>
 
-                            <Spinner isLoading={repoInitPending}/>
+                            <Spinner isLoading={repoInitPending} light/>
                             {repoInitSuccess && <Check/>}
                             {repoInitSuccess ? "Connected" : "Connect"}
                         </Button>
 
-                        {repoInitSuccess && (
-                            <Link to={"/repo/setup/storage"}
-                                  state={{pgConfig: pgValidate.data.data!, adapter: "host"}}>
-                                <Button>
-                                    Configure Storage <ArrowRight/>
-                                </Button>
-                            </Link>
-                        )}
+                        {repoInitSuccess && <Nav pgResponse={pgValidate.data.data!}/>}
                     </div>
                 </form>
             </Form>

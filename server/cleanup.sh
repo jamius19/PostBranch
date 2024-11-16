@@ -18,9 +18,19 @@ sudo rm -rf /var/lib/post-branch/*
 
 # Step 4: Remove all files in /mnt that match "pb" in their names
 echo "Removing all files in /mnt matching 'pb'"
-for file in $(ls /mnt | grep pb); do
-  echo "Removing file: /mnt/$file"
-  sudo rm -rf "/mnt/$file"
+for file in /mnt/*pb*; do
+  if [ -e "$file" ]; then
+    echo "Removing file: $file"
+    sudo rm -rf "$file"
+  fi
+done
+
+echo "Removing all files in /var/run/postbranch"
+for file in /var/run/postbranch/*; do
+  if [ -e "$file" ]; then
+    echo "Removing file: $file"
+    sudo rm -rf "$file"
+  fi
 done
 
 echo "Cleanup complete."

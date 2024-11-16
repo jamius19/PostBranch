@@ -19,6 +19,9 @@ type branchTable struct {
 	// Columns
 	ID        sqlite.ColumnInteger
 	Name      sqlite.ColumnString
+	Status    sqlite.ColumnString
+	PgStatus  sqlite.ColumnString
+	PgPort    sqlite.ColumnInteger
 	RepoID    sqlite.ColumnInteger
 	ParentID  sqlite.ColumnInteger
 	DatasetID sqlite.ColumnInteger
@@ -66,13 +69,16 @@ func newBranchTableImpl(schemaName, tableName, alias string) branchTable {
 	var (
 		IDColumn        = sqlite.IntegerColumn("id")
 		NameColumn      = sqlite.StringColumn("name")
+		StatusColumn    = sqlite.StringColumn("status")
+		PgStatusColumn  = sqlite.StringColumn("pg_status")
+		PgPortColumn    = sqlite.IntegerColumn("pg_port")
 		RepoIDColumn    = sqlite.IntegerColumn("repo_id")
 		ParentIDColumn  = sqlite.IntegerColumn("parent_id")
 		DatasetIDColumn = sqlite.IntegerColumn("dataset_id")
 		CreatedAtColumn = sqlite.TimestampColumn("created_at")
 		UpdatedAtColumn = sqlite.TimestampColumn("updated_at")
-		allColumns      = sqlite.ColumnList{IDColumn, NameColumn, RepoIDColumn, ParentIDColumn, DatasetIDColumn, CreatedAtColumn, UpdatedAtColumn}
-		mutableColumns  = sqlite.ColumnList{NameColumn, RepoIDColumn, ParentIDColumn, DatasetIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		allColumns      = sqlite.ColumnList{IDColumn, NameColumn, StatusColumn, PgStatusColumn, PgPortColumn, RepoIDColumn, ParentIDColumn, DatasetIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		mutableColumns  = sqlite.ColumnList{NameColumn, StatusColumn, PgStatusColumn, PgPortColumn, RepoIDColumn, ParentIDColumn, DatasetIDColumn, CreatedAtColumn, UpdatedAtColumn}
 	)
 
 	return branchTable{
@@ -81,6 +87,9 @@ func newBranchTableImpl(schemaName, tableName, alias string) branchTable {
 		//Columns
 		ID:        IDColumn,
 		Name:      NameColumn,
+		Status:    StatusColumn,
+		PgStatus:  PgStatusColumn,
+		PgPort:    PgPortColumn,
 		RepoID:    RepoIDColumn,
 		ParentID:  ParentIDColumn,
 		DatasetID: DatasetIDColumn,
