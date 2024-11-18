@@ -120,7 +120,7 @@ func checkPgSuperuser(pgInit pg.HostImportReqDto) error {
 }
 
 func checkPgReplication(pgInit pg.HostImportReqDto) error {
-	var replicationQuery = fmt.Sprintf(pgSvc.HostReplicationCheckQuery, pgInit.DbUsername)
+	var replicationQuery = fmt.Sprintf(pgSvc.ReplicationCheckQuery, pgInit.DbUsername)
 
 	output, err := pgSvc.Single(&pgInit, replicationQuery)
 	if err != nil {
@@ -267,23 +267,54 @@ func copyPostgresData(
 		return
 	}
 
-	if err := pgSvc.WritePgHbaConfig(&pgInit, mainDatasetPath); err != nil {
+	hbaConfigs, err := getHbaFileConfig(&pgInit)
+	if err != nil {
+		return
+	}
+
+	if err := pgSvc.WritePgHbaConfig(hbaConfigs, mainDatasetPath); err != nil {
 		return
 	}
 
 	// Set the permissions for the main dataset directory to PostBranch user
 	// as after the backup, the permissions are set to root
-	output, err = cmd.Single(
-		"change-dataset-permissions",
-		false,
-		false,
-		"su",
-		"-c",
-		fmt.Sprintf("chown -R %s:%s %s", pgSvc.PostBranchUser, pgSvc.PostBranchUser, mainDatasetPath),
-	)
+	err = util.SetPermissionsRecursive(mainDatasetPath, pgSvc.PostBranchUser, pgSvc.PostBranchUser)
 
 	if err != nil {
 		log.Errorf("Failed to change dataset permissions. output: %s data: %v", output, err)
+		return
+	}
+
+	status, err := pgSvc.StartPg(pgInit.PostgresPath, pool.MountPath, dataset.Name)
+	if err != nil {
+		return
+	}
+
+	log.Infof("Postgres backup successful for repo: %v", repo)
+
+	password, err := addSuperuser(pgInit.DbUsername, pgInit.Password, port)
+
+	if err != nil {
+		log.Errorf("Failed to add superuser: %v", err)
+	}
+
+	_, err = db.AddCredential(ctx, *repo.ID, password)
+	if err != nil {
+		log.Errorf("Failed to add credential: %v", err)
+	}
+
+	branch := model.Branch{
+		Name:      "main",
+		PgPort:    port,
+		RepoID:    *repo.ID,
+		PgStatus:  string(status),
+		DatasetID: dataset.ID,
+		Status:    string(db.BranchOpen),
+	}
+	
+	branch, err = db.CreateBranch(ctx, branch)
+	if err != nil {
+		log.Errorf("Failed to create main branch: %v", err)
 		return
 	}
 
@@ -293,33 +324,7 @@ func copyPostgresData(
 		log.Errorf("Failed to update status of pgInfo: %v", err)
 	}
 
-	branch := model.Branch{
-		Name:      "main",
-		PgPort:    port,
-		RepoID:    *repo.ID,
-		PgStatus:  string(db.BranchPgStopped),
-		DatasetID: dataset.ID,
-		Status:    string(db.BranchOpen),
-	}
+	log.Infof("Updated pg info, pg: %v", updatedPg)
 
-	branch, err = db.CreateBranch(ctx, branch)
-	if err != nil {
-		log.Errorf("Failed to create main branch: %v", err)
-		return
-	}
-
-	log.Infof("Updated pg and branch info, pg: %v, branch: %v", updatedPg, branch)
-
-	status, err := pgSvc.StartPg(pgInit.PostgresPath, pool.MountPath, dataset.Name)
-	if err != nil {
-		return
-	}
-
-	err = db.UpdateBranchPgStatus(ctx, *branch.ID, status)
-	if err != nil {
-		log.Errorf("Failed to create main branch: %v", err)
-		return
-	}
-
-	log.Infof("Postgres backup successful for repo: %v", repo)
+	log.Infof("Added %s as a superuser", pgSvc.PostBranchDbUser)
 }

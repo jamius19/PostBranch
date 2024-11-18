@@ -1,5 +1,5 @@
 import {Navigate, useNavigate, useParams} from "react-router-dom";
-import React from "react";
+import React, {JSX, useMemo} from "react";
 import {formatValue, isInteger} from "@/util/lib.ts";
 import {useQuery} from "@tanstack/react-query";
 import {deleteRepo, getRepo} from "@/service/repo-service.ts";
@@ -8,11 +8,22 @@ import {ArrowRight, Box, CircleCheck, Clock2, Database, GitBranch, OctagonX, Tra
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table.tsx";
 import dayjs from "dayjs";
 import utc from 'dayjs/plugin/utc'
-import {PgStatus} from "@/@types/repo/repo-dto.ts";
+import {Branch, BranchPgStatus, PgStatus} from "@/@types/repo/repo-dto.ts";
 import {Button} from "@/components/ui/button.tsx";
 import {clsx} from "clsx";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import Link from "@/components/Link.tsx";
+import {twMerge as tm} from "tailwind-merge";
+import {Icon} from "@iconify/react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog"
+
 
 const Repo = () => {
     const navigate = useNavigate();
@@ -24,6 +35,7 @@ const Repo = () => {
     const repoQuery = useQuery({
         queryKey: ["repo", repoId],
         queryFn: () => getRepo(repoId),
+        refetchInterval: 2000,
     });
 
     const repoDeleteQuery = useNotifiableMutation({
@@ -47,17 +59,47 @@ const Repo = () => {
 
     const disableInteraction = repoDeleteQuery.isPending;
 
+    const branchMap = useMemo(() => {
+        const branchMap = new Map<number, string>();
+
+        if (!repo?.branches) {
+            return new Map<number, BranchPgStatus>();
+        }
+
+        repo.branches.forEach(branch => {
+            branchMap.set(branch.id, branch.name);
+        });
+
+        return branchMap;
+    }, [repo]);
+
+    const getParentBranchName = (branchId?: number): string => {
+        if (!branchId) {
+            return "—";
+        }
+
+        const branchName = branchMap.get(branchId);
+
+        if (!branchName) {
+            console.error(`Branch with ID ${branchId} not found.`);
+            return "—";
+        }
+
+        return branchName;
+    }
+
     if (!isInteger(repoIdStr)) {
         return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
     }
 
-    if (repoQuery.isPending || disableInteraction || repoDeleteQuery.isSuccess || repoQuery.isRefetching) {
+    if (repoQuery.isPending || disableInteraction || repoDeleteQuery.isSuccess) {
         return <Spinner/>;
     }
 
     if (!repoQuery.isSuccess || !repo) {
         return <Navigate to={"/error"} state={{message: "An error occurred while fetching the repository."}}/>;
     }
+
 
     return (
         <div>
@@ -72,7 +114,7 @@ const Repo = () => {
                 </Button>
             </div>
 
-            <InfoBlock status={repo.pg.status}/>
+            <InfoBlock status={<repo className="pg"></repo>.status}/>
 
             <div className={"flex mt-2 mb-12 flex-col gap-2 text-sm"}>
                 <p>
@@ -101,31 +143,33 @@ const Repo = () => {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-[100px]">Name</TableHead>
+                                <TableHead className="w-[150px]">Actions</TableHead>
                                 <TableHead>Port</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>Branched From</TableHead>
-                                <TableHead className="text-right">Created</TableHead>
+                                <TableHead className={"w-[100px]"}>Branched From</TableHead>
                             </TableRow>
                         </TableHeader>
 
                         <TableBody>
                             {repo.branches.length !== 0 ? repo.branches.map((branch) => (
                                 <TableRow key={branch.id}>
-                                    <TableCell className="font-medium w-[200px]">{branch.name}</TableCell>
+                                    <TableCell className="font-medium w-[200px] flex">
+                                        <span>{branch.name}</span>
+                                    </TableCell>
+                                    <TableCell>
+                                        <BranchActions branch={branch}/>
+                                    </TableCell>
                                     <TableCell className={"w-[100px]"}>{branch.port}</TableCell>
                                     <TableCell className={"w-[150px]"}>
-                                        <div
-                                            className={"select-none bg-gray-800 text-white inline-flex items-center justify-center rounded-full border ps-2.5 pe-3 text-[11px] font-bold"}>
-                                            <span className={"relative top-[-1.5px] text-[23px] text-lime-400 me-1"}>
-                                                ●
-                                            </span>
-                                            {branch.pgStatus}
-                                        </div>
+                                        <BranchPgStatusBadge status={branch.pgStatus}/>
                                     </TableCell>
-                                    <TableCell className={"w-[200px]"}>{branch.parentId ?? "—"}</TableCell>
-                                    <TableCell className="text-right">
-                                        {dayjs.utc(repo.createdAt).format("DD MMM, YYYY HH:mm:ss")}
+                                    <TableCell
+                                        className={"w-[200px]"}>
+                                        {getParentBranchName(branch.parentId)}
                                     </TableCell>
+                                    {/*<TableCell className="text-right">*/}
+                                    {/*    {dayjs.utc(repo.createdAt).format("DD MMM, YYYY HH:mm:ss")}*/}
+                                    {/*</TableCell>*/}
                                 </TableRow>
                             )) : (
                                 <TableRow>
@@ -209,6 +253,67 @@ const InfoBlock = ({status}: { status?: PgStatus }) => {
             </div>
         );
     }
+}
+
+const BranchActions = ({branch}: { branch: Branch }): JSX.Element => {
+    return (
+        <>
+            <Dialog>
+                <DialogTrigger>
+                    <button
+                        className={"border ml-1 border-gray-300 hover:border-gray-800 hover:bg-gray-800 transition-all duration-100 rounded"}>
+
+                        <Icon
+                            icon="teenyicons:info-small-solid"
+                            className={"text-gray-600 hover:text-white"}
+                            fontSize={20}/>
+                    </button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Branch Information</DialogTitle>
+                        <DialogDescription>
+                            This action cannot be undone. This will permanently delete your
+                            account
+                            and remove your data from our servers.
+                        </DialogDescription>
+                    </DialogHeader>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
+const BranchPgStatusBadge = ({status}: { status: BranchPgStatus }): JSX.Element => {
+    const failed = status === "FAILED";
+    const running = status === "RUNNING";
+    const stopped = status === "STOPPED";
+
+    return (
+        <div
+            className={tm(
+                "select-none text-primary inline-flex items-center justify-center rounded-full border ps-2.5 pe-3 text-[11px] font-bold transition-all duration-200",
+                running && "border-gray-800 bg-gray-800 text-white",
+                failed && "border-red-500 bg-white text-red-500",
+            )}>
+
+            {!stopped ? (
+                <span className={tm(
+                    "relative top-[-1.5px] text-[23px] me-1",
+                    running && "text-lime-500",
+                    failed && "text-red-500",
+                )}>
+                ●
+                </span>
+            ) : (
+                <span className={"relative top-[-1px] text-[23px] me-1 text-gray-500"}>
+                ○
+                </span>
+            )}
+
+            {status}
+        </div>
+    )
 }
 
 export default Repo;

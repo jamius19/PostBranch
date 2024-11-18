@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"github.com/jamius19/postbranch/cmd"
 	"io"
 	"os"
 	"os/user"
@@ -56,6 +57,24 @@ func SetPermissions(path, username string) error {
 
 	if err := os.Chown(path, uid, gid); err != nil {
 		return fmt.Errorf("failed to change ownership of path: %s, error: %v", path, err)
+	}
+
+	return nil
+}
+
+func SetPermissionsRecursive(path, user, group string) error {
+	output, err := cmd.Single(
+		"change-permissions-recursive",
+		false,
+		false,
+		"su",
+		"-c",
+		fmt.Sprintf("chown -R %s:%s %s", user, group, path),
+	)
+
+	if err != nil {
+		log.Errorf("Failed to change permissions recursively. output: %s data: %v", output, err)
+		return err
 	}
 
 	return nil

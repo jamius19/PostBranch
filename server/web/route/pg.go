@@ -5,50 +5,10 @@ import (
 	"github.com/jamius19/postbranch/dto"
 	pgDto "github.com/jamius19/postbranch/dto/pg"
 	"github.com/jamius19/postbranch/service/pg/adapter/host"
-	"github.com/jamius19/postbranch/service/pg/adapter/local"
 	"github.com/jamius19/postbranch/service/validation"
 	"github.com/jamius19/postbranch/util"
 	"net/http"
 )
-
-func ValidateLocalPg(w http.ResponseWriter, r *http.Request) {
-	log.Info("Starting validation of local pg")
-
-	var pgInit pgDto.LocalImportReqDto
-	if err := json.NewDecoder(r.Body).Decode(&pgInit); err != nil {
-		util.WriteError(w, r, err, http.StatusBadRequest)
-		return
-	}
-
-	if err := validation.Validate(pgInit); err != nil {
-		util.WriteError(w, r, err, http.StatusBadRequest)
-		return
-	}
-
-	err := local.Validate(pgInit)
-	if err != nil {
-		util.WriteError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	clusterSizeInMb, err := local.GetClusterSize(pgInit)
-	if err != nil {
-		util.WriteError(w, r, err, http.StatusInternalServerError)
-		return
-	}
-
-	pgInitWithSize := pgDto.ValidationResponseDto[pgDto.LocalImportReqDto]{
-		PgConfig:        pgInit,
-		ClusterSizeInMb: clusterSizeInMb,
-	}
-
-	response := dto.Response[pgDto.ValidationResponseDto[pgDto.LocalImportReqDto]]{
-		Data:  &pgInitWithSize,
-		Error: nil,
-	}
-
-	util.WriteResponse(w, r, response, http.StatusOK)
-}
 
 func ValidateHostPg(w http.ResponseWriter, r *http.Request) {
 	log.Info("Starting validation of host pg")

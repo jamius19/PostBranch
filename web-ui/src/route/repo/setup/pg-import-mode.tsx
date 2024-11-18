@@ -1,5 +1,5 @@
 import React, {useState} from "react";
-import {ArrowRight, Monitor, Network} from "lucide-react";
+import {ArrowRight, Network} from "lucide-react";
 import {PgAdapterName} from "@/@types/repo/pg/pg-response-dto.ts";
 import {twMerge as tm} from "tailwind-merge";
 import Link from "@/components/Link.tsx";
@@ -12,7 +12,6 @@ import {
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
-import {Badge} from "@/components/ui/badge.tsx";
 import {useParams} from "react-router-dom";
 
 const SelectedBgClass = "border border-gray-700 bg-gray-700 text-white shadow-gray-200 shadow-lg";
@@ -66,23 +65,6 @@ const PgImportMode = () => {
 
             <div className={"flex flex-col gap-6 w-[550px] select-none"}>
                 <div
-                    onClick={() => setSelectedType("local")}
-                    className={tm("cursor-pointer px-8 py-6 rounded-lg shadow-gray-100 hover:shadow-gray-200 shadow-md hover:shadow-lg transition-all duration-200 flex flex-row gap-4",
-                        selectedType !== "local" && NormalBgClass,
-                        selectedType === "local" && SelectedBgClass)}>
-                    <Monitor className={"flex-shrink-0 relative top-[3px] left-[2px]"} size={20}/>
-                    <div>
-                        <p className={"font-bold"}>Local Connection</p>
-                        <p className={"text-sm mt-2.5"}>
-                            Choose this if your Postgres server is running on the same machine as PostBranch, and you
-                            can connect via <code className={"font-bold"}>peer</code> or <code
-                            className={"font-bold"}>trust</code> based
-                            authentication with operating system user
-                        </p>
-                    </div>
-                </div>
-
-                <div
                     onClick={() => setSelectedType("host")}
                     className={tm("cursor-pointer px-8 py-6 rounded-lg shadow-gray-100 hover:shadow-gray-200 shadow-md hover:shadow-lg transition-all duration-200 flex flex-row gap-4",
                         selectedType !== "host" && NormalBgClass,
@@ -91,7 +73,6 @@ const PgImportMode = () => {
                     <div>
                         <div className={"flex gap-2"}>
                             <p className={"font-bold"}>Host Connection</p>
-                            <Badge className={"bg-blue-600"}>Recommended</Badge>
                         </div>
                         <p className={"text-sm mt-2.5"}>
                             Choose this if your Postgres server is running on a remote

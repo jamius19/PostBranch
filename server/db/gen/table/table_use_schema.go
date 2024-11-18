@@ -11,6 +11,7 @@ package table
 // this method only once at the beginning of the program.
 func UseSchema(schema string) {
 	Branch = Branch.FromSchema(schema)
+	Credential = Credential.FromSchema(schema)
 	Pg = Pg.FromSchema(schema)
 	Repo = Repo.FromSchema(schema)
 	ZfsDataset = ZfsDataset.FromSchema(schema)

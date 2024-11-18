@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jamius19/postbranch/db"
 	"github.com/jamius19/postbranch/logger"
+	"github.com/jamius19/postbranch/util"
 	"net"
 	"os"
 	"path/filepath"
@@ -20,32 +21,6 @@ type HbaConfig struct {
 	Address    *string
 	Netmask    *string
 	AuthMethod string
-}
-
-func getHbaFileConfig(auth HostAuthInfo) ([]HbaConfig, error) {
-	var results []HbaConfig
-
-	_, rows, cleanup, err := RunQuery(auth, `
-		SELECT type as Type, database as Database, user_name AS Username, address AS Address, netmask as Netmask, auth_method AS AuthMethod 
-		FROM pg_hba_file_rules 
-		WHERE auth_method IN ('trust', 'peer', 'md5', 'scram-sha-256');`,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-
-	for rows.Next() {
-		var result HbaConfig
-		err := rows.Scan(&result.Type, &result.Database, &result.Username, &result.Address, &result.Netmask, &result.AuthMethod)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan postgres. error: %v", err)
-		}
-		results = append(results, result)
-	}
-
-	return results, nil
 }
 
 func GetPgPort(ctx context.Context) (int32, error) {
@@ -67,6 +42,7 @@ func GetPgPort(ctx context.Context) (int32, error) {
 		}
 
 		if portAvailable {
+			log.Infof("Found available port: %d", i)
 			return i, nil
 		}
 	}
@@ -92,6 +68,7 @@ func WritePostgresConfig(port int32, repoName, logPath, datasetPath string) erro
 
 	// This is set because we'll be using ZFS filesystem for Postgres data
 	builder.WriteString("full_page_writes = off\n")
+	builder.WriteString("password_encryption = 'scram-sha-256'\n")
 
 	builder.WriteString(fmt.Sprintf("log_directory = '%s'\n", logPath))
 	builder.WriteString(fmt.Sprintf("log_filename = '%s_%s'\n", repoName, "%Y-%m-%d_%H-%M-%S.log"))
@@ -108,12 +85,8 @@ func WritePostgresConfig(port int32, repoName, logPath, datasetPath string) erro
 	return nil
 }
 
-func WritePgHbaConfig(auth HostAuthInfo, datasetPath string) error {
+func WritePgHbaConfig(hbaConfigs []HbaConfig, datasetPath string) error {
 	log.Info("Writing pg hba file")
-	hbaConfigs, err := getHbaFileConfig(auth)
-	if err != nil {
-		return err
-	}
 
 	var builder strings.Builder
 
@@ -123,22 +96,29 @@ func WritePgHbaConfig(auth HostAuthInfo, datasetPath string) error {
 		database := strings.Trim(config.Database, "{}")
 		username := strings.Trim(config.Username, "{}")
 
-		line := config.Type + "\t" + database + "\t" + username
+		line := fmt.Sprintf("%-15s %-15s %-15s %-30s %-30s %-15s\n",
+			config.Type,
+			database,
+			username,
+			util.TrimmedString(config.Address),
+			util.TrimmedString(config.Netmask),
+			config.AuthMethod,
+		)
 
-		// Append Address and Netmask if provided
-		if config.Address != nil {
-			line += "\t" + *config.Address
-			if config.Netmask != nil {
-				line += "\t" + *config.Netmask
-			}
-		} else {
-			line += "\t"
-		}
-
-		// Append the authentication method
-		line += "\t" + config.AuthMethod + "\n"
 		builder.WriteString(line)
 	}
+
+	// Add postbranch user with host access
+	builder.WriteString("\n\n\n\n# This hba entry is added by postbranch, DO NOT remove it\n\n")
+	builder.WriteString(fmt.Sprintf("%-15s %-50s %-50s %-30s %-30s %-15s\n",
+		"host",
+		"all",
+		PostBranchDbUser,
+		"127.0.0.1",
+		"255.255.255.255",
+		"scram-sha-256",
+	))
+	builder.WriteString("\n# This hba entry is added by postbranch, DO NOT remove it\n")
 
 	// Write to file
 	file, err := os.Create(filepath.Join(datasetPath, "pg_hba.conf"))

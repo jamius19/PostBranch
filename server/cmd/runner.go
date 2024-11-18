@@ -55,7 +55,7 @@ func Single(key string, skipLog bool, sensitive bool, name string, args ...strin
 		return outputStr, responseerror.From("Error executing command")
 	}
 
-	output := string(out)
+	output := strings.TrimSpace(string(out))
 	if !skipLog {
 		if !sensitive {
 			log.Debugf("[s] Output for %s command: %s, output: %s",

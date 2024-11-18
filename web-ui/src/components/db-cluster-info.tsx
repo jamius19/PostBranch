@@ -12,7 +12,7 @@ const DbClusterInfo = ({clusterSizeInMb}: { clusterSizeInMb: number }) => {
                 <p>
                     A superuser named <code className={"font-bold"}>postbranch</code> will be created in
                     the imported database cluster. <br/>
-                    <b>Please DO NOT alter<span className={"mx-[1.5px]"}>/</span>delete this user.</b> This user wll be
+                    <b>Please DO NOT alter<span className={"mx-[1.5px]"}>/</span>delete this user.</b> This user will be
                     used
                     by PostBranch for management
                     purposes.

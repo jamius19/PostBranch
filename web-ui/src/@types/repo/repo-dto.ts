@@ -4,21 +4,21 @@ export type PgStatus = "COMPLETED" | "STARTED" | "FAILED";
 export type BranchStatus = "OPEN" | "MERGED" | "CLOSED";
 export type BranchPgStatus = "RUNNING" | "STOPPED" | "FAILED";
 
-interface Pg {
+export interface Pg {
     id: number;
     version: number;
     status: PgStatus;
     output: string;
 }
 
-interface Pool {
+export interface Pool {
     id: number;
     Type: RepoType;
     sizeInMb: number;
     Path: string;
 }
 
-interface Branch {
+export interface Branch {
     id: number;
     name: string;
     status: BranchStatus;

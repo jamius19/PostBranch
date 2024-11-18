@@ -13,15 +13,11 @@ func routes(r *chi.Mux) {
 
 			// Adapters for different pg sources
 			r.Route("/postgres/validate", func(r chi.Router) {
-				r.Post("/local", route.ValidateLocalPg)
 				r.Post("/host", route.ValidateHostPg)
 			})
 
 			// Adapters for different pg sources
 			r.Route("/import", func(r chi.Router) {
-				r.Post("/local", route.InitializeLocalRepo)
-				r.Post("/{repoId}/local", route.ReInitializeLocalPg)
-
 				r.Post("/host", route.InitializeHostRepo)
 				r.Post("/{repoId}/host", route.ReInitializeHostPg)
 			})

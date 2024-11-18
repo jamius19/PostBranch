@@ -19,29 +19,16 @@ import (
 )
 
 const (
-	PostBranchUser = "postbranch"
-	MaxConnection  = 20
+	PostBranchUser   = "postbranch"
+	PostBranchDbUser = "postbranch"
+	MaxConnection    = 20
 
 	ClusterSizeQuery    = "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
 	VersionQuery        = "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"
 	SuperUserCheckQuery = `SELECT usesuper FROM pg_user WHERE usename = CURRENT_USER;`
 
-	// LocalReplicationCheckQuery TODO: Fix potential sql injection
-	LocalReplicationCheckQuery = `SELECT CASE 
-           WHEN EXISTS (
-               SELECT 1
-               FROM pg_hba_file_rules
-               WHERE type = 'local'
-                 AND 'replication' = ANY(database)
-                 AND auth_method IN ('trust', 'peer')
-                 AND ('%s' = ANY(user_name) OR 'all' = ANY(user_name))
-           ) 
-           THEN 'REPLICATION_ALLOWED'
-           ELSE 'REPLICATION_NOT_ALLOWED'
-       END AS replication_status;`
-
-	// HostReplicationCheckQuery TODO: Fix potential sql injection
-	HostReplicationCheckQuery = `SELECT CASE 
+	// ReplicationCheckQuery TODO: Fix potential sql injection
+	ReplicationCheckQuery = `SELECT CASE 
            WHEN EXISTS (
                SELECT 1
                FROM pg_hba_file_rules
@@ -53,19 +40,19 @@ const (
            THEN 'REPLICATION_ALLOWED'
            ELSE 'REPLICATION_NOT_ALLOWED'
        END AS replication_status;`
+
+	HbaConfigQuery = `
+		SELECT type as Type, database as Database, user_name AS Username, 
+				address AS Address, netmask as Netmask, auth_method AS AuthMethod 
+		FROM pg_hba_file_rules 
+		WHERE auth_method IN ('trust', 'peer', 'md5', 'scram-sha-256');`
+
+	CreatePostbranchUserQuery = "CREATE USER %s WITH SUPERUSER PASSWORD '%s';"
 )
 
 var log = logger.Logger
 
-type HostAuthInfo interface {
-	GetHost() string
-	GetPort() int32
-	GetDbUsername() string
-	GetPassword() string
-	GetSslMode() string
-}
-
-func GetConnString(pg HostAuthInfo) string {
+func GetConnString(pg AuthInfo) string {
 	return fmt.Sprintf(
 		"user=%s host=%s port=%d password=%s dbname=postgres sslmode=%s",
 		pg.GetDbUsername(),
@@ -76,7 +63,7 @@ func GetConnString(pg HostAuthInfo) string {
 	)
 }
 
-func Single(auth HostAuthInfo, query string) (string, error) {
+func Single(auth AuthInfo, query string) (string, error) {
 	var result string
 
 	_, rows, cleanup, err := RunQuery(auth, query)
@@ -95,19 +82,7 @@ func Single(auth HostAuthInfo, query string) (string, error) {
 	return result, nil
 }
 
-func SingleLocal(pgOsUser, pgPath, query string) (string, error) {
-	var result string
-
-	output, err := GetPsqlCommand(pgOsUser, pgPath, query)
-
-	if err != nil || output == cmd.EmptyOutput {
-		return "", fmt.Errorf("failed to scan postgres. error: %v", err)
-	}
-
-	return result, nil
-}
-
-func RunQuery(pgInit HostAuthInfo, query string) (*sql.DB, *sql.Rows, func(), error) {
+func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error) {
 	cleanup := func() {}
 	log.Debugf("Running query: %s", query)
 
@@ -146,7 +121,7 @@ func RunQuery(pgInit HostAuthInfo, query string) (*sql.DB, *sql.Rows, func(), er
 	return db, rows, cleanup, err
 }
 
-func CreatePgPassFile(auth HostAuthInfo) error {
+func CreatePgPassFile(auth AuthInfo) error {
 	pgPassContent := fmt.Sprintf(
 		`%s:%d:*:%s:%s`,
 		auth.GetHost(),
@@ -174,7 +149,7 @@ func RemovePgPassFile() error {
 	return nil
 }
 
-func GetPsqlCommand(pgOsUser, pgPath, query string) (string, error) {
+func GetPsqlCommand(pgOsUser, pgPath, query string, port int32) (string, error) {
 	return cmd.Single(
 		"pg-version-check",
 		false,
@@ -184,6 +159,7 @@ func GetPsqlCommand(pgOsUser, pgPath, query string) (string, error) {
 		filepath.Join(pgPath, "bin", "psql"),
 		"-t",
 		"-w",
+		"-p", fmt.Sprintf("%d", port),
 		"-P", "format=unaligned",
 		"-w",
 		"-c", query,
@@ -284,23 +260,23 @@ func StartPg(pgPath, mountPath, datasetName string) (db.BranchPgStatus, error) {
 
 	if err != nil {
 		log.Errorf("Failed to start postgres. output: %s data: %v", outputString, err)
-		return "", err
+		return db.BranchPgFailed, nil
 	}
 
 	log.Infof("Started postgres. output: %s", outputString)
 
-	status, err := getPgStatus(pgPath, mainDatasetPath, false)
-	if err != nil {
-		return "", err
-	}
-
-	// As we just started the postgres, we expect the status to be running
-	if status == db.BranchPgStopped {
-		return db.BranchPgFailed, nil
-	}
-
-	log.Infof("Postgres is ready. status: %s", status)
-	return status, nil
+	//status, err := getPgStatus(pgPath, mainDatasetPath, false)
+	//if err != nil {
+	//	return "", err
+	//}
+	//
+	//// As we just started the postgres, we expect the status to be running
+	//if status == db.BranchPgStopped {
+	//	return db.BranchPgFailed, nil
+	//}
+	//
+	//log.Infof("Postgres is ready. status: %s", status)
+	return db.BranchPgRunning, nil
 }
 
 // StopPg is potentially expensive. It SHOULD always be called as/inside a goroutine.

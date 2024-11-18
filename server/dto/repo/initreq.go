@@ -13,7 +13,7 @@ type Config struct {
 	SizeInMb int64  `json:"sizeInMb" validate:"required_if=RepoType virtual"`
 }
 
-type InitDto[T pg.HostImportReqDto | pg.LocalImportReqDto] struct {
+type InitDto[T pg.HostImportReqDto] struct {
 	RepoConfig Config `json:"repoConfig"`
 	PgConfig   T      `json:"pgConfig"`
 }
