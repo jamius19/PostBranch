@@ -52,17 +52,6 @@ func CreateBranch(ctx context.Context, repoDetail db.RepoDetail, branchInit repo
 		return model.Branch{}, err
 	}
 
-	dataset := model.ZfsDataset{
-		Name:   branchInit.Name,
-		PoolID: *repoDetail.Pool.ID,
-	}
-
-	dataset, err = db.CreateDataset(ctx, dataset)
-	if err != nil {
-		log.Errorf("Can't create dataset: %s", err)
-		return model.Branch{}, err
-	}
-
 	port, err := pg.GetPgPort(ctx)
 	if err != nil {
 		log.Errorf("Can't get pg port: %s", err)
@@ -70,13 +59,12 @@ func CreateBranch(ctx context.Context, repoDetail db.RepoDetail, branchInit repo
 	}
 
 	branch := model.Branch{
-		Name:      branchInit.Name,
-		Status:    string(db.BranchOpen),
-		PgStatus:  string(db.BranchPgStarting),
-		PgPort:    port,
-		RepoID:    *repoDetail.Repo.ID,
-		ParentID:  parentBranch.ID,
-		DatasetID: dataset.ID,
+		Name:     branchInit.Name,
+		Status:   string(db.BranchOpen),
+		PgStatus: string(db.BranchPgStarting),
+		PgPort:   port,
+		RepoID:   *repoDetail.Repo.ID,
+		ParentID: parentBranch.ID,
 	}
 
 	branch, err = db.CreateBranch(ctx, branch)
@@ -92,18 +80,17 @@ func CreateBranch(ctx context.Context, repoDetail db.RepoDetail, branchInit repo
 }
 
 func startBranchPg(repoDetail db.RepoDetail, branch model.Branch) {
-	dataDir := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "data")
+	datasetPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "data")
 	logPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs")
-	logDir := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs", "*")
 
-	err := pg.UpdatePostgresConfig(dataDir, "port", util.StringVal(branch.PgPort))
+	err := pg.UpdatePostgresConfig(datasetPath, "port", util.StringVal(branch.PgPort))
 	if err != nil {
 		log.Errorf("Can't update postgres port, branch: %s, err: %s", branch.Name, err)
 		return
 	}
 
 	err = pg.UpdatePostgresConfig(
-		dataDir,
+		datasetPath,
 		"log_filename",
 		fmt.Sprintf("'%s_%s__%s.log'", repoDetail.Repo.Name, branch.Name, "%Y-%m-%d_%H-%M-%S"),
 	)
@@ -114,7 +101,7 @@ func startBranchPg(repoDetail db.RepoDetail, branch model.Branch) {
 	}
 
 	err = pg.UpdatePostgresConfig(
-		dataDir,
+		datasetPath,
 		"log_directory",
 		fmt.Sprintf("'%s'", logPath),
 	)
@@ -124,9 +111,16 @@ func startBranchPg(repoDetail db.RepoDetail, branch model.Branch) {
 		return
 	}
 
-	err = util.RemoveGlob(logDir)
+	logDirGlobPattern := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs", "*")
+	err = util.RemoveGlob(logDirGlobPattern)
 	if err != nil {
 		log.Errorf("Can't remove log files, branch: %s, err: %s", branch.Name, err)
+		return
+	}
+
+	err = pg.CleanPidFile(datasetPath)
+	if err != nil {
+		log.Errorf("Can't clean pid file, branch: %s, err: %s", branch.Name, err)
 		return
 	}
 

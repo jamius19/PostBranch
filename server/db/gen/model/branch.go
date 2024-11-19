@@ -19,7 +19,6 @@ type Branch struct {
 	PgPort    int32
 	RepoID    int32
 	ParentID  *int32
-	DatasetID *int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

@@ -9,9 +9,8 @@ import (
 )
 
 type PoolDetail struct {
-	Pool     model.ZfsPool      `alias:"pool"`
-	Pg       model.Pg           `alias:"pg"`
-	Datasets []model.ZfsDataset `alias:"datasets"`
+	Pool model.ZfsPool `alias:"pool"`
+	Pg   model.Pg      `alias:"pg"`
 }
 
 func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
@@ -21,13 +20,11 @@ func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
 		SELECT(
 			table.ZfsPool.AllColumns.As("pool"),
 			table.Pg.AllColumns.As("pg"),
-			table.ZfsDataset.AllColumns.As("datasets"),
 		).
 		FROM(
 			table.ZfsPool.
 				INNER_JOIN(table.Repo, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
-				INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)).
-				INNER_JOIN(table.ZfsDataset, table.ZfsDataset.PoolID.EQ(table.ZfsPool.ID)),
+				INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)),
 		)
 
 	log.Tracef("Query: %s", stmt.DebugSql())

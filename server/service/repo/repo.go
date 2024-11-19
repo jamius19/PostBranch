@@ -27,11 +27,6 @@ func InitializeRepo(ctx context.Context, repoInit repoDto.Info) (model.Repo, mod
 
 		log.Infof("Initialized virtual pool. PoolInfo: %v", pool)
 
-		_, err = zfs.EmptyDataset(ctx, pool, "main")
-		if err != nil {
-			return model.Repo{}, model.ZfsPool{}, err
-		}
-
 		repoInfo := model.Repo{
 			Name:   repoInit.GetName(),
 			PoolID: *pool.ID,
@@ -50,23 +45,25 @@ func InitializeRepo(ctx context.Context, repoInit repoDto.Info) (model.Repo, mod
 	return model.Repo{}, model.ZfsPool{}, fmt.Errorf("not implemented yet")
 }
 
-func DeleteRepo(ctx context.Context, repo model.Repo, pool model.ZfsPool, pg model.Pg) error {
-	log.Infof("Deleting repo: %v, pool: %v", repo, pool)
+func DeleteRepo(ctx context.Context, repoDetail db.RepoDetail) error {
+	log.Infof("Deleting repo: %s, pool: %s", repoDetail.Repo.Name, repoDetail.Pool.Path)
+	pool := repoDetail.Pool
 
-	// TODO: Stop postgres
-	datasets, err := db.ListDatasetByNameAndPoolId(ctx, *pool.ID)
-	if err != nil {
-		return err
-	}
+	for _, branch := range repoDetail.Branches {
+		err := pgSvc.StopPg(
+			repoDetail.Pg.PgPath,
+			pool.MountPath,
+			branch.Name,
+			false,
+		)
 
-	for _, dataset := range datasets {
-		if err := pgSvc.StopPg(pg.PgPath, pool.MountPath, dataset.Name, false); err != nil {
+		if err != nil {
 			return err
 		}
 	}
 	//pgSvc.StopPg(pg.PgPath, pool.MountPath)
 
-	loopbackPath, err := zfs.FindDevicePath(pool)
+	loopbackPath, err := zfs.FindDevicePath(pool.Name)
 	if err != nil {
 		return err
 	}

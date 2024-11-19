@@ -7,9 +7,9 @@ import (
 	"github.com/jamius19/postbranch/db"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/dto/pg"
-	"github.com/jamius19/postbranch/dto/repo"
 	"github.com/jamius19/postbranch/logger"
 	pgSvc "github.com/jamius19/postbranch/service/pg"
+	"github.com/jamius19/postbranch/service/zfs"
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"path/filepath"
@@ -49,19 +49,12 @@ func Import(
 	pgInfo *model.Pg,
 ) (model.Pg, error) {
 
-	// Get the main dataset for importing Postgres data
-	dataset, err := db.GetDatasetByNameAndPoolId(ctx, "main", *pool.ID)
-	if err != nil {
-		log.Errorf("Dataset not found for repo: %v and pool: %v", repo.MinSizeInMb, pool)
-		return model.Pg{}, responseerror.From("Associated Dataset not found")
-	}
-
 	createdPg, err := insertPgEntry(ctx, pgConfig, repoInfo, pgInfo)
 	if err != nil {
 		return model.Pg{}, err
 	}
 
-	go copyPostgresData(pgConfig, repoInfo, pool, dataset, createdPg)
+	go copyPostgresData(pgConfig, repoInfo, pool, createdPg)
 
 	return createdPg, nil
 }
@@ -208,20 +201,24 @@ func copyPostgresData(
 	pgInit pg.HostImportReqDto,
 	repo model.Repo,
 	pool model.ZfsPool,
-	dataset model.ZfsDataset,
 	pgInfo model.Pg,
 ) {
 
-	log.Info("Started copying host Postgres data to ZFS Dataset")
+	log.Info("Started copying host Postgres data to main branch")
 	log.Infof("Repo: %v", repo)
 	log.Infof("Pool: %v", pool)
-	log.Infof("Dataset: %v", dataset)
 	log.Infof("Pg: %v", pgInfo)
 
 	ctx := context.Background()
+	branchName := "main"
 	pgBaseBackupPath := filepath.Join(pgInit.PostgresPath, "bin", "pg_basebackup")
-	mainDatasetPath := filepath.Join(pool.MountPath, "main", "data")
-	logPath := filepath.Join(pool.MountPath, "main", "logs")
+	mainDatasetPath := filepath.Join(pool.MountPath, branchName, "data")
+	logPath := filepath.Join(pool.MountPath, branchName, "logs")
+
+	err := zfs.EmptyDataset(pool, branchName)
+	if err != nil {
+		return
+	}
 
 	port, err := pgSvc.GetPgPort(ctx)
 	if err != nil {
@@ -281,7 +278,7 @@ func copyPostgresData(
 		return
 	}
 
-	if err := pgSvc.WritePostgresConfig(port, repo.Name, "main", logPath, mainDatasetPath); err != nil {
+	if err := pgSvc.WritePostgresConfig(port, repo.Name, branchName, logPath, mainDatasetPath); err != nil {
 		return
 	}
 
@@ -313,12 +310,11 @@ func copyPostgresData(
 	log.Infof("Updated pg info, pg: %v", updatedPg)
 
 	branch := model.Branch{
-		Name:      "main",
-		PgPort:    port,
-		RepoID:    *repo.ID,
-		PgStatus:  string(db.BranchPgStarting),
-		DatasetID: dataset.ID,
-		Status:    string(db.BranchOpen),
+		Name:     "main",
+		PgPort:   port,
+		RepoID:   *repo.ID,
+		PgStatus: string(db.BranchPgStarting),
+		Status:   string(db.BranchOpen),
 	}
 
 	branch, err = db.CreateBranch(ctx, branch)
@@ -327,7 +323,7 @@ func copyPostgresData(
 		return
 	}
 
-	status, err := pgSvc.StartPg(pgInit.PostgresPath, pool.MountPath, dataset.Name)
+	status, err := pgSvc.StartPg(pgInit.PostgresPath, pool.MountPath, branchName)
 	if err != nil {
 		return
 	}

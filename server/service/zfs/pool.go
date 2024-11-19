@@ -82,13 +82,13 @@ func createPool(ctx context.Context, repoinit repo.Info, loopNo int) (model.ZfsP
 }
 
 func MountAll(ctx context.Context) error {
-	poolDetails, err := db.ListPoolDetail(ctx)
+	repoDetails, err := db.ListRepo(ctx)
 	if err != nil {
 		log.Errorf("Failed to list pools: %s", err)
 		return err
 	}
 
-	if len(poolDetails) == 0 {
+	if len(repoDetails) == 0 {
 		log.Info("No pools to mount")
 		return nil
 	}
@@ -100,14 +100,14 @@ func MountAll(ctx context.Context) error {
 	var poolWg sync.WaitGroup
 
 	log.Infof("Stopping potential dangling postgres instances")
-	for _, poolDetail := range poolDetails {
-		for _, dataset := range poolDetail.Datasets {
+	for _, repoDetail := range repoDetails {
+		for _, branch := range repoDetail.Branches {
 			poolWg.Add(1)
 
 			go pg.StopDangingPg(
-				poolDetail.Pg.PgPath,
-				poolDetail.Pool.MountPath,
-				dataset.Name,
+				repoDetail.Pg.PgPath,
+				repoDetail.Pool.MountPath,
+				branch.Name,
 				&poolWg,
 			)
 		}
@@ -115,7 +115,7 @@ func MountAll(ctx context.Context) error {
 
 	poolWg.Wait()
 
-	for _, poolDetail := range poolDetails {
+	for _, poolDetail := range repoDetails {
 		if poolDetail.Pool.PoolType == "virtual" {
 			if err := setupLoopback(&poolDetail.Pool); err != nil {
 				failedPools = append(failedPools, poolDetail.Pool.Name)
@@ -138,7 +138,7 @@ func MountAll(ctx context.Context) error {
 		return err
 	}
 
-	log.Infof("%d pool(s) are mounted.", len(poolDetails))
+	log.Infof("%d pool(s) are mounted.", len(repoDetails))
 
 	select {
 	case <-ctx.Done():
@@ -147,18 +147,18 @@ func MountAll(ctx context.Context) error {
 	default:
 	}
 
-	log.Infof("**** Importing all databases. This is a time consuming operation. Please wait. ****")
+	log.Infof("**** Importing all databases. Please wait. ****")
 
-	for _, poolDetail := range poolDetails {
-		for _, dataset := range poolDetail.Datasets {
+	for _, poolDetail := range repoDetails {
+		for _, branch := range poolDetail.Branches {
 			poolWg.Add(1)
 
 			go pg.StartPgAndUpdateBranch(
 				ctx,
 				poolDetail.Pg.PgPath,
 				poolDetail.Pool.MountPath,
-				dataset.Name,
-				*dataset.ID,
+				branch.Name,
+				*branch.ID,
 				&poolWg,
 			)
 		}
@@ -222,14 +222,14 @@ func cleanDanglingLoopbackDevices(pool *model.ZfsPool) error {
 
 func UnmountAll() error {
 	log.Infof("Unmounting all pools")
-	poolDetails, err := db.ListPoolDetail(context.Background())
+	repoDetials, err := db.ListRepo(context.Background())
 
 	if err != nil {
-		log.Errorf("Failed to list poolDetails: %s", err)
+		log.Errorf("Failed to list repoDetials: %s", err)
 		return err
 	}
 
-	if len(poolDetails) == 0 {
+	if len(repoDetials) == 0 {
 		log.Info("No pools to unmount")
 		return nil
 	}
@@ -238,16 +238,16 @@ func UnmountAll() error {
 	var poolWg sync.WaitGroup
 	ctx := context.Background()
 
-	for _, poolDetail := range poolDetails {
-		for _, dataset := range poolDetail.Datasets {
+	for _, repoDetail := range repoDetials {
+		for _, branch := range repoDetail.Branches {
 			poolWg.Add(1)
 
 			go pg.StopPgAndUpdateBranch(
 				ctx,
-				poolDetail.Pg.PgPath,
-				poolDetail.Pool.MountPath,
-				dataset.Name,
-				*dataset.ID,
+				repoDetail.Pg.PgPath,
+				repoDetail.Pool.MountPath,
+				branch.Name,
+				*branch.ID,
 				&poolWg,
 			)
 		}
@@ -257,9 +257,9 @@ func UnmountAll() error {
 	poolWg.Wait()
 	log.Infof("All databases are stopped")
 
-	for _, poolDetail := range poolDetails {
-		if err := Unmount(poolDetail.Pool); err != nil {
-			log.Errorf("Failed to unmount pool: %v, error: %s", poolDetail.Pool, err)
+	for _, repoDetail := range repoDetials {
+		if err := Unmount(repoDetail.Pool); err != nil {
+			log.Errorf("Failed to unmount pool: %v, error: %s", repoDetail.Pool, err)
 			return err
 		}
 	}
@@ -270,7 +270,7 @@ func UnmountAll() error {
 func Unmount(pool model.ZfsPool) error {
 	log.Infof("Unmounting pool %v", pool)
 
-	loopbackPath, err := FindDevicePath(pool)
+	loopbackPath, err := FindDevicePath(pool.Name)
 	if err != nil {
 		return err
 	}
@@ -303,17 +303,17 @@ func Unmount(pool model.ZfsPool) error {
 	return nil
 }
 
-func FindDevicePath(pool model.ZfsPool) (string, error) {
+func FindDevicePath(poolName string) (string, error) {
 	devicePath, err := cmd.Single(
 		"find-zpool-device",
 		false,
 		false,
 		"su", "-c",
-		fmt.Sprintf(FindLoopBackFromZpoolCmd, pool.Name),
+		fmt.Sprintf(FindLoopBackFromZpoolCmd, poolName),
 	)
 
 	if err != nil {
-		log.Errorf("Failed to get path path for pool: %v, error: %s", pool, err)
+		log.Errorf("Failed to get path path for pool: %s, error: %s", poolName, err)
 		return "", err
 	}
 

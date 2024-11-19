@@ -348,7 +348,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = repo.DeleteRepo(r.Context(), repoDetail.Repo, repoDetail.Pool, repoDetail.Pg)
+	err = repo.DeleteRepo(r.Context(), repoDetail)
 	if err != nil {
 		util.WriteError(
 			w,

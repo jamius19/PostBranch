@@ -14,6 +14,5 @@ func UseSchema(schema string) {
 	Credential = Credential.FromSchema(schema)
 	Pg = Pg.FromSchema(schema)
 	Repo = Repo.FromSchema(schema)
-	ZfsDataset = ZfsDataset.FromSchema(schema)
 	ZfsPool = ZfsPool.FromSchema(schema)
 }
