@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	PostBranchUser   = "postbranch"
-	PostBranchDbUser = "postbranch"
-	MaxConnection    = 20
+	PostBranchUser = "postbranch"
+	MaxConnection  = 20
 
 	ClusterSizeQuery    = "SELECT CEIL(SUM(pg_database_size(datname)) / (1024 * 1024)) AS total_db_size_mb FROM pg_database;"
 	VersionQuery        = "SELECT split_part(current_setting('server_version'), '.', 1) AS major_version;"

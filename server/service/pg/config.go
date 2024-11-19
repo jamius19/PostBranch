@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -73,10 +72,6 @@ func UpdatePostgresConfig(datasetPath, configName, configVal string) error {
 		return fmt.Errorf("failed to write postgres config file: %w", err)
 	}
 
-	//if err := util.SetPermissions(configPath, PostBranchUser); err != nil {
-	//	return fmt.Errorf("failed to set permissions on postgres config file: %w", err)
-	//}
-
 	return nil
 
 }
@@ -126,7 +121,7 @@ func WritePgHbaConfig(hbaConfigs []HbaConfig, datasetPath string) error {
 		database := strings.Trim(config.Database, "{}")
 		username := strings.Trim(config.Username, "{}")
 
-		line := fmt.Sprintf("%-15s %-15s %-15s %-30s %-30s %-15s\n",
+		line := fmt.Sprintf("%-15s %-50s %-50s %-20s %-15s %-15s\n",
 			config.Type,
 			database,
 			username,
@@ -137,18 +132,6 @@ func WritePgHbaConfig(hbaConfigs []HbaConfig, datasetPath string) error {
 
 		builder.WriteString(line)
 	}
-
-	// Add postbranch user with host access
-	builder.WriteString("\n\n\n\n# This hba entry is added by postbranch, DO NOT remove it\n\n")
-	builder.WriteString(fmt.Sprintf("%-15s %-50s %-50s %-30s %-30s %-15s\n",
-		"host",
-		"all",
-		PostBranchDbUser,
-		"127.0.0.1",
-		"255.255.255.255",
-		"scram-sha-256",
-	))
-	builder.WriteString("\n# This hba entry is added by postbranch, DO NOT remove it\n")
 
 	// Write to file
 	file, err := os.Create(filepath.Join(datasetPath, "pg_hba.conf"))
@@ -166,7 +149,7 @@ func WritePgHbaConfig(hbaConfigs []HbaConfig, datasetPath string) error {
 }
 
 func checkPort(port int32) (bool, error) {
-	host := ":" + strconv.Itoa(int(port))
+	host := fmt.Sprintf(":%d", port)
 
 	server, err := net.Listen("tcp", host)
 

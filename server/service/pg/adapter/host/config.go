@@ -2,7 +2,6 @@ package host
 
 import (
 	"fmt"
-	"github.com/jamius19/postbranch/service/credential"
 	"github.com/jamius19/postbranch/service/pg"
 )
 
@@ -26,24 +25,4 @@ func getHbaFileConfig(auth pg.AuthInfo) ([]pg.HbaConfig, error) {
 	}
 
 	return results, nil
-}
-
-func addSuperuser(previousSuperUser, previousPassword string, newPort int32) (string, error) {
-	password := credential.GeneratePassword()
-	query := fmt.Sprintf(pg.CreatePostbranchUserQuery, pg.PostBranchDbUser, password)
-
-	authInfo := pg.NewAuthInfo(
-		"localhost",
-		newPort,
-		previousSuperUser,
-		previousPassword,
-		"disable",
-	)
-
-	_, err := pg.Single(&authInfo, query)
-	if err != nil {
-		return "", err
-	}
-
-	return password, nil
 }

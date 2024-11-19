@@ -328,22 +328,9 @@ func copyPostgresData(
 		return
 	}
 
-	password, err := addSuperuser(pgInit.DbUsername, pgInit.Password, port)
-
-	if err != nil {
-		log.Errorf("Failed to add superuser: %v", err)
-	}
-
-	_, err = db.AddCredential(ctx, *repo.ID, password)
-	if err != nil {
-		log.Errorf("Failed to add credential: %v", err)
-	}
-
 	err = db.UpdateBranchPgStatus(ctx, *branch.ID, status)
 	if err != nil {
 		log.Errorf("Failed to update branch status: %v", err)
 		return
 	}
-
-	log.Infof("Added %s as a superuser", pgSvc.PostBranchDbUser)
 }

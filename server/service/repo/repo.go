@@ -61,7 +61,6 @@ func DeleteRepo(ctx context.Context, repoDetail db.RepoDetail) error {
 			return err
 		}
 	}
-	//pgSvc.StopPg(pg.PgPath, pool.MountPath)
 
 	loopbackPath, err := zfs.FindDevicePath(pool.Name)
 	if err != nil {
