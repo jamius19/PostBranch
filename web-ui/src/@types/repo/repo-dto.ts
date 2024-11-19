@@ -2,7 +2,7 @@ import {RepoType} from "@/@types/repo/repo-init-dto.ts";
 
 export type PgStatus = "COMPLETED" | "STARTED" | "FAILED";
 export type BranchStatus = "OPEN" | "MERGED" | "CLOSED";
-export type BranchPgStatus = "RUNNING" | "STOPPED" | "FAILED";
+export type BranchPgStatus = "STARTING" | "RUNNING" | "STOPPED" | "FAILED";
 
 export interface Pg {
     id: number;
@@ -15,7 +15,8 @@ export interface Pool {
     id: number;
     Type: RepoType;
     sizeInMb: number;
-    Path: string;
+    path: string;
+    mountPath: string;
 }
 
 export interface Branch {
@@ -26,6 +27,7 @@ export interface Branch {
     port: number;
     parentId: number;
     createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface RepoResponseDto {

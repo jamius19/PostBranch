@@ -5,10 +5,14 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"time"
 )
 
 func CreateDataset(ctx context.Context, dataset model.ZfsDataset) (model.ZfsDataset, error) {
 	var newDataset model.ZfsDataset
+
+	dataset.CreatedAt = time.Now().UTC()
+	dataset.UpdatedAt = time.Now().UTC()
 
 	stmt := table.ZfsDataset.
 		INSERT(table.ZfsDataset.AllColumns).

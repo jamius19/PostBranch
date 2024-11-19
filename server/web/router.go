@@ -10,6 +10,7 @@ func routes(r *chi.Mux) {
 		r.Route("/repos", func(r chi.Router) {
 			r.Get("/", route.ListRepos)
 			r.Get("/{repoId}", route.GetRepo)
+			r.Post("/{repoId}/branch", route.CreateBranch)
 
 			// Adapters for different pg sources
 			r.Route("/postgres/validate", func(r chi.Router) {

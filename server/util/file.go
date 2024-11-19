@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 )
 
@@ -78,6 +79,21 @@ func SetPermissionsRecursive(path, user, group string) error {
 	}
 
 	return nil
+}
+
+func RemoveGlob(path string) (err error) {
+	contents, err := filepath.Glob(path)
+	if err != nil {
+		return
+	}
+
+	for _, item := range contents {
+		err = os.RemoveAll(item)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 func RemoveFile(path string) error {

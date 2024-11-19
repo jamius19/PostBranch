@@ -23,7 +23,7 @@ import {
     BreadcrumbSeparator
 } from "@/components/ui/breadcrumb.tsx";
 import {generateName} from '@criblinc/docker-names'
-import Spinner from "@/components/Spinner.tsx";
+import Spinner from "@/components/spinner.tsx";
 import {ArrowRight, Check, Info} from "lucide-react";
 import {formatValue, getRandomInt} from "@/util/lib.ts";
 import React, {JSX, useCallback, useEffect, useMemo, useState} from "react";
@@ -89,7 +89,7 @@ const RepoSetup = (): JSX.Element => {
             .refine(value => !value.includes(" "), {
                 message: "Path path must not contain spaces",
             })
-            .refine(val => !reposQuery.data?.data?.some(repo => repo.pool.Path === val),
+            .refine(val => !reposQuery.data?.data?.some(repo => repo.pool.path === val),
                 "Repository with the same path already exists"),
     }), [reposQuery]);
 

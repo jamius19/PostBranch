@@ -30,11 +30,13 @@ type Branch struct {
 	Port      int32             `json:"port"`
 	ParentID  *int32            `json:"parentId"`
 	CreatedAt time.Time         `json:"createdAt"`
+	UpdatedAt time.Time         `json:"updatedAt"`
 }
 
 type Pool struct {
-	ID       *int32 `json:"id"`
-	Type     string `json:"type"`
-	SizeInMb int64  `json:"sizeInMb"`
-	Path     string `json:"path"`
+	ID        *int32 `json:"id"`
+	Type      string `json:"type"`
+	SizeInMb  int64  `json:"sizeInMb"`
+	Path      string `json:"path"`
+	MountPath string `json:"mountPath"`
 }

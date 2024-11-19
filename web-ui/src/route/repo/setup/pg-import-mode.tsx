@@ -2,7 +2,7 @@ import React, {useState} from "react";
 import {ArrowRight, Network} from "lucide-react";
 import {PgAdapterName} from "@/@types/repo/pg/pg-response-dto.ts";
 import {twMerge as tm} from "tailwind-merge";
-import Link from "@/components/Link.tsx";
+import Link from "@/components/link.tsx";
 import {Button} from "@/components/ui/button.tsx";
 import {
     Breadcrumb,

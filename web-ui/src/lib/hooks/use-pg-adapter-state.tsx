@@ -2,11 +2,11 @@ import {useParams} from "react-router-dom";
 import {PgAdapterName, PgAdapters, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
 import {Button} from "@/components/ui/button.tsx";
 import {ArrowRight, Check} from "lucide-react";
-import Link from "@/components/Link.tsx";
+import Link from "@/components/link.tsx";
 import React, {JSX, SyntheticEvent} from "react";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import {reimport} from "@/service/repo-service.ts";
-import Spinner from "@/components/Spinner.tsx";
+import Spinner from "@/components/spinner.tsx";
 
 type UsePgAdapterStateReturnType = [({pgResponse}: { pgResponse: PgResponseDto }) => JSX.Element]
 

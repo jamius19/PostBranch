@@ -5,6 +5,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"time"
 )
 
 type PoolDetail struct {
@@ -42,6 +43,9 @@ func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
 
 func CreatePool(ctx context.Context, pool model.ZfsPool) (model.ZfsPool, error) {
 	var newPool model.ZfsPool
+
+	pool.CreatedAt = time.Now().UTC()
+	pool.UpdatedAt = time.Now().UTC()
 
 	stmt := table.ZfsPool.
 		INSERT(table.ZfsPool.AllColumns).

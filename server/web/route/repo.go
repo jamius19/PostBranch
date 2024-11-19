@@ -360,6 +360,18 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	err = db.DeleteRepo(r.Context(), repoId)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Failed to delete repository"),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
 	response := dto.Response[int32]{
 		Data:  repoDetail.Repo.ID,
 		Error: nil,
@@ -380,20 +392,23 @@ func getRepoResponse(repoDetail db.RepoDetail) repoDto.Response {
 	}
 
 	poolInfo := repoDto.Pool{
-		ID:       repoDetail.Pool.ID,
-		Type:     repoDetail.Pool.PoolType,
-		Path:     repoDetail.Pool.Path,
-		SizeInMb: repoDetail.Pool.SizeInMb,
+		ID:        repoDetail.Pool.ID,
+		Type:      repoDetail.Pool.PoolType,
+		Path:      repoDetail.Pool.Path,
+		MountPath: repoDetail.Pool.MountPath,
+		SizeInMb:  repoDetail.Pool.SizeInMb,
 	}
 
 	for _, branch := range repoDetail.Branches {
 		branchesInfo = append(branchesInfo, repoDto.Branch{
-			ID:       branch.ID,
-			Name:     branch.Name,
-			Status:   db.BranchStatus(branch.Status),
-			PgStatus: db.BranchPgStatus(branch.PgStatus),
-			Port:     branch.PgPort,
-			ParentID: branch.ParentID,
+			ID:        branch.ID,
+			Name:      branch.Name,
+			Status:    db.BranchStatus(branch.Status),
+			PgStatus:  db.BranchPgStatus(branch.PgStatus),
+			Port:      branch.PgPort,
+			ParentID:  branch.ParentID,
+			CreatedAt: branch.CreatedAt,
+			UpdatedAt: branch.UpdatedAt,
 		})
 	}
 

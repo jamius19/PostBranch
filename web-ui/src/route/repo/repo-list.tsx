@@ -3,11 +3,11 @@ import {Navigate} from "react-router-dom";
 import {listRepos} from "@/service/repo-service.ts";
 import {Button} from "@/components/ui/button.tsx";
 import RepoInfoCard from "@/components/repo-info-card/repo-info-card.tsx";
-import Spinner from "@/components/Spinner.tsx";
+import Spinner from "@/components/spinner.tsx";
 import {clsx} from "clsx";
 import styles from "./repo.module.scss";
 import {PackagePlus} from "lucide-react";
-import Link from "@/components/Link.tsx";
+import Link from "@/components/link.tsx";
 
 const RepoList = () => {
     const repoListQuery = useQuery({

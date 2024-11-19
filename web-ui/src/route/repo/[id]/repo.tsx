@@ -3,26 +3,37 @@ import React, {JSX, useMemo} from "react";
 import {formatValue, isInteger} from "@/util/lib.ts";
 import {useQuery} from "@tanstack/react-query";
 import {deleteRepo, getRepo} from "@/service/repo-service.ts";
-import Spinner from "@/components/Spinner.tsx";
-import {ArrowRight, Box, CircleCheck, Clock2, Database, GitBranch, OctagonX, Trash2, TriangleAlert} from "lucide-react";
+import Spinner from "@/components/spinner.tsx";
+import {
+    ArrowRight,
+    Box,
+    CircleCheck,
+    Clock2,
+    Database,
+    GitBranch,
+    HardDrive,
+    Info,
+    OctagonX,
+    Trash2,
+    TriangleAlert,
+    Wrench,
+    X
+} from "lucide-react";
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table.tsx";
 import dayjs from "dayjs";
 import utc from 'dayjs/plugin/utc'
-import {Branch, BranchPgStatus, PgStatus} from "@/@types/repo/repo-dto.ts";
+import {Branch, BranchPgStatus, PgStatus, RepoResponseDto} from "@/@types/repo/repo-dto.ts";
 import {Button} from "@/components/ui/button.tsx";
 import {clsx} from "clsx";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
-import Link from "@/components/Link.tsx";
+import Link from "@/components/link.tsx";
 import {twMerge as tm} from "tailwind-merge";
-import {Icon} from "@iconify/react";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog"
+import {DialogFooter, DialogHeader, DialogTitle,} from "@/components/ui/dialog"
+import {Badge} from "@/components/ui/badge.tsx";
+import CopyToClipboard from "@/components/copy-to-clipboard.tsx";
+import TooltipDialog from "@/components/tooltip-dialog.tsx";
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip.tsx";
+import NewBranch from "@/components/new-branch.tsx";
 
 
 const Repo = () => {
@@ -31,12 +42,6 @@ const Repo = () => {
     dayjs.extend(utc);
     const {repoId: repoIdStr} = useParams<{ repoId: string }>();
     const repoId = parseInt(repoIdStr!);
-
-    const repoQuery = useQuery({
-        queryKey: ["repo", repoId],
-        queryFn: () => getRepo(repoId),
-        refetchInterval: 2000,
-    });
 
     const repoDeleteQuery = useNotifiableMutation({
         mutationKey: ["repo-delete", repoId],
@@ -51,6 +56,13 @@ const Repo = () => {
         }
     });
 
+    const repoQuery = useQuery({
+        queryKey: ["repo", repoId],
+        queryFn: () => getRepo(repoId),
+        refetchInterval: 2000,
+        enabled: !repoDeleteQuery.isPending && !repoDeleteQuery.isSuccess,
+    });
+
     const handleDelete = () => {
         repoDeleteQuery.mutate(repoId);
     }
@@ -60,14 +72,14 @@ const Repo = () => {
     const disableInteraction = repoDeleteQuery.isPending;
 
     const branchMap = useMemo(() => {
-        const branchMap = new Map<number, string>();
+        const branchMap = new Map<number, Branch>();
 
         if (!repo?.branches) {
-            return new Map<number, BranchPgStatus>();
+            return new Map<number, Branch>();
         }
 
         repo.branches.forEach(branch => {
-            branchMap.set(branch.id, branch.name);
+            branchMap.set(branch.id, branch);
         });
 
         return branchMap;
@@ -78,14 +90,14 @@ const Repo = () => {
             return "—";
         }
 
-        const branchName = branchMap.get(branchId);
+        const branch = branchMap.get(branchId);
 
-        if (!branchName) {
+        if (!branch) {
             console.error(`Branch with ID ${branchId} not found.`);
             return "—";
         }
 
-        return branchName;
+        return branch.name;
     }
 
     if (!isInteger(repoIdStr)) {
@@ -100,7 +112,6 @@ const Repo = () => {
         return <Navigate to={"/error"} state={{message: "An error occurred while fetching the repository."}}/>;
     }
 
-
     return (
         <div>
             <div className={"flex mb-2.5 items-center gap-3 "}>
@@ -114,22 +125,29 @@ const Repo = () => {
                 </Button>
             </div>
 
-            <InfoBlock status={<repo className="pg"></repo>.status}/>
+            <PgInfoBlock status={repo.pg.status}/>
 
-            <div className={"flex mt-2 mb-12 flex-col gap-2 text-sm"}>
-                <p>
+            <div className={"flex mt-3 mb-24 flex-col gap-2 text-sm"}>
+                <div>
                     <Box
-                        className={"inline-block relative top-[-1px] me-1.5"}
+                        className={"inline-block relative top-[-1px] me-2.5"}
                         size={16}/>
                     {formatValue(repo.pool.sizeInMb)}
-                </p>
+                </div>
 
-                <p>
+                <div>
                     <Database
-                        className={"inline-block relative top-[-1.5px] me-1.5"}
+                        className={"inline-block relative top-[-1.5px] me-2.5"}
                         size={15}/>
                     Postgres {repo.pg.version}
-                </p>
+                </div>
+
+                <div>
+                    <HardDrive
+                        className={"inline-block relative top-[-1.5px] me-2.5"}
+                        size={15}/>
+                    <code className={"text-[0.85 rem]"}>{repo.pool.mountPath}</code>
+                </div>
             </div>
 
             {repo.pg.status === "COMPLETED" && (
@@ -137,6 +155,10 @@ const Repo = () => {
                     <div className={"mb-2 flex items-center gap-3"}>
                         <GitBranch size={22} className={"relative top-[-5.5px]"}/>
                         <h1>Branches</h1>
+
+                        <div className={"relative bottom-0.5 ml-auto"}>
+                            <NewBranch repoId={repo.id} branches={repo.branches} branchMap={branchMap}/>
+                        </div>
                     </div>
 
                     <Table>
@@ -155,9 +177,17 @@ const Repo = () => {
                                 <TableRow key={branch.id}>
                                     <TableCell className="font-medium w-[200px] flex">
                                         <span>{branch.name}</span>
+                                        {branch.name === "main" && (
+                                            <Badge
+                                                className={"ml-2 opacity-80 rounded-full"}
+                                                variant={"info"}
+                                                size={"sm"}>
+                                                Primary
+                                            </Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell>
-                                        <BranchActions branch={branch}/>
+                                        <BranchActions repo={repo} branch={branch}/>
                                     </TableCell>
                                     <TableCell className={"w-[100px]"}>{branch.port}</TableCell>
                                     <TableCell className={"w-[150px]"}>
@@ -167,9 +197,6 @@ const Repo = () => {
                                         className={"w-[200px]"}>
                                         {getParentBranchName(branch.parentId)}
                                     </TableCell>
-                                    {/*<TableCell className="text-right">*/}
-                                    {/*    {dayjs.utc(repo.createdAt).format("DD MMM, YYYY HH:mm:ss")}*/}
-                                    {/*</TableCell>*/}
                                 </TableRow>
                             )) : (
                                 <TableRow>
@@ -212,7 +239,7 @@ const Repo = () => {
     );
 };
 
-const InfoBlock = ({status}: { status?: PgStatus }) => {
+const PgInfoBlock = ({status}: { status?: PgStatus }) => {
     if (!status) {
         return (
             <div>
@@ -255,39 +282,107 @@ const InfoBlock = ({status}: { status?: PgStatus }) => {
     }
 }
 
-const BranchActions = ({branch}: { branch: Branch }): JSX.Element => {
-    return (
-        <>
-            <Dialog>
-                <DialogTrigger>
-                    <button
-                        className={"border ml-1 border-gray-300 hover:border-gray-800 hover:bg-gray-800 transition-all duration-100 rounded"}>
+const BranchActions = (
+    {repo, branch}: { repo: RepoResponseDto, branch: Branch }
+): JSX.Element => {
 
-                        <Icon
-                            icon="teenyicons:info-small-solid"
-                            className={"text-gray-600 hover:text-white"}
-                            fontSize={20}/>
-                    </button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Branch Information</DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. This will permanently delete your
-                            account
-                            and remove your data from our servers.
-                        </DialogDescription>
-                    </DialogHeader>
-                </DialogContent>
-            </Dialog>
-        </>
+    return (
+        <div className={"flex gap-1"}>
+            <TooltipDialog
+                tooltip={<p>View additional information about <code>{branch.name}</code> branch</p>}
+                icon={<Info size={14}/>}>
+
+                <DialogHeader>
+                    <DialogTitle>Branch Information</DialogTitle>
+                </DialogHeader>
+
+                <div className={"text-sm text-gray-700 flex flex-col gap-5"}>
+                    <p>
+                        <b>Postgres Port:</b><br/><code>{branch.port}</code>
+                        <CopyToClipboard
+                            className={"inline ms-2"}
+                            data={`${branch.port}`}/>
+                    </p>
+
+                    <p>
+                        <b>Postgres Data Cluster
+                            Path:</b><br/><code>{`${repo.pool.mountPath}/${branch.name}/data`}</code>
+                        <CopyToClipboard
+                            className={"inline ms-2"}
+                            data={`${repo.pool.mountPath}/${branch.name}/data`}/>
+                    </p>
+
+                    <p>
+                        <b>Postgres Log Path:</b><br/><code>{`${repo.pool.mountPath}/${branch.name}/logs`}</code>
+                        <CopyToClipboard
+                            className={"inline ms-2"}
+                            data={`${repo.pool.mountPath}/${branch.name}/logs`}/>
+                    </p>
+
+                    <p>
+                        <b>Created Date:</b><br/> {dayjs.utc(branch.createdAt).format("DD MMM, YYYY HH:mm:ss")} UTC
+                    </p>
+
+                    <p>
+                        <b>Updated Date:</b><br/> {dayjs.utc(branch.createdAt).format("DD MMM, YYYY HH:mm:ss")} UTC
+                    </p>
+                </div>
+            </TooltipDialog>
+
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger>
+                        <Link to={"/repos/" + repo.id + "/branches/" + branch.id}>
+                            <div
+                                className={"border border-gray-300 hover:border-gray-800 hover:bg-gray-800 transition-all duration-100 rounded px-1 py-1 text-gray-600 hover:text-white relative bottom-[1.5px]"}>
+                                <Wrench size={14}/>
+                            </div>
+                        </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        Configure Branch Settings
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+
+            <TooltipDialog
+                className={"hover:border-red-500 hover:bg-red-500"}
+                tooltip={<p>Close <code>{branch.name}</code> branch</p>}
+                icon={<X size={14}/>}>
+
+                <DialogHeader>
+                    <DialogTitle>Close Branch</DialogTitle>
+                </DialogHeader>
+
+                <div className={"text-sm text-gray-700"}>
+                    <p>
+                        Are you sure you want to close this branch?<br/>
+                        The postgres instance will be shut down and associated data will be deleted.
+                    </p>
+
+                    <p className={"mt-3 font-bold"}>
+                        This action cannot be undone.
+                    </p>
+                </div>
+                <DialogFooter>
+                    <Button variant={"ghost"} size={"sm"}>Cancel</Button>
+                    <Button variant={"destructive"} size={"sm"}>
+                        Close Branch
+                    </Button>
+                </DialogFooter>
+            </TooltipDialog>
+
+        </div>
     );
 }
 
-const BranchPgStatusBadge = ({status}: { status: BranchPgStatus }): JSX.Element => {
-    const failed = status === "FAILED";
+const BranchPgStatusBadge = (
+    {status}: { status: BranchPgStatus }
+): JSX.Element => {
+    const starting = status === "STARTING";
     const running = status === "RUNNING";
     const stopped = status === "STOPPED";
+    const failed = status === "FAILED";
 
     return (
         <div
@@ -297,7 +392,7 @@ const BranchPgStatusBadge = ({status}: { status: BranchPgStatus }): JSX.Element 
                 failed && "border-red-500 bg-white text-red-500",
             )}>
 
-            {!stopped ? (
+            {!stopped && !starting ? (
                 <span className={tm(
                     "relative top-[-1.5px] text-[23px] me-1",
                     running && "text-lime-500",

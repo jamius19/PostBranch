@@ -221,10 +221,7 @@ func StopPgAndUpdateBranch(
 func StopDangingPg(pgPath, mountPath, datasetName string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	err := StopPg(pgPath, mountPath, datasetName, true)
-	if err != nil {
-		log.Infof("No dangling postgres found for dataset: %v", datasetName)
-	}
+	_ = StopPg(pgPath, mountPath, datasetName, true)
 }
 
 // StartPg is potentially expensive. It SHOULD always be called as/inside a goroutine.

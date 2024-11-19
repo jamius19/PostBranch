@@ -5,6 +5,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"time"
 )
 
 type RepoDetail struct {
@@ -53,7 +54,8 @@ func GetRepo(ctx context.Context, repoId int64) (RepoDetail, error) {
 			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
 			INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)).
 			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
-		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId)))
+		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId))).
+		ORDER_BY(table.Branch.CreatedAt.DESC())
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
@@ -68,6 +70,9 @@ func GetRepo(ctx context.Context, repoId int64) (RepoDetail, error) {
 
 func CreateRepo(ctx context.Context, repo model.Repo) (model.Repo, error) {
 	var newRepo model.Repo
+
+	repo.CreatedAt = time.Now().UTC()
+	repo.UpdatedAt = time.Now().UTC()
 
 	stmt := table.Repo.INSERT(table.Repo.Name, table.Repo.PoolID).
 		VALUES(repo.Name, repo.PoolID).

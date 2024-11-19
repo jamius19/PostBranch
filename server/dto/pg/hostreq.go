@@ -9,7 +9,7 @@ type HostImportReqDto struct {
 	PostgresPath string `json:"postgresPath" validate:"required,min=1,excludesall= "`
 	Version      int32  `json:"version" validate:"required,min=15,max=17"`
 	Host         string `json:"host,omitempty" validate:"required,min=1,excludesall= "`
-	Port         int32  `json:"port,omitempty" validate:"required,min=1,max=65535"`
+	Port         int32  `json:"port,omitempty" validate:"required,numeric,min=1,max=65535"`
 	SslMode      string `json:"sslMode,omitempty" validate:"required,oneof=disable require verify-ca verify-full,excludesall= "`
 	DbUsername   string `json:"dbUsername,omitempty" validate:"required,min=1,excludesall= "`
 	Password     string `json:"password,omitempty" validate:"required,min=1,excludesall= "`

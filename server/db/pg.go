@@ -5,6 +5,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"time"
 )
 
 type PgStatus string
@@ -17,6 +18,9 @@ const (
 
 func CreatePg(ctx context.Context, pg model.Pg) (model.Pg, error) {
 	var newPg model.Pg
+
+	pg.CreatedAt = time.Now().UTC()
+	pg.UpdatedAt = time.Now().UTC()
 
 	stmt := table.Pg.INSERT(table.Pg.AllColumns).
 		MODEL(pg).
@@ -35,6 +39,9 @@ func CreatePg(ctx context.Context, pg model.Pg) (model.Pg, error) {
 
 func UpdatePg(ctx context.Context, pg model.Pg) (model.Pg, error) {
 	var updatedPg model.Pg
+
+	pg.UpdatedAt = time.Now().UTC()
+
 	stmt := table.Pg.UPDATE(table.Pg.AllColumns.Except(table.Pg.ID, table.Pg.RepoID)).
 		MODEL(pg).
 		WHERE(table.Pg.ID.EQ(sqlite.Int(int64(*pg.ID)))).
@@ -54,7 +61,12 @@ func UpdatePg(ctx context.Context, pg model.Pg) (model.Pg, error) {
 func UpdatePgStatus(ctx context.Context, pgId int32, status PgStatus, output string) (model.Pg, error) {
 	var pg model.Pg
 
-	stmt := table.Pg.UPDATE(table.Pg.Status).
+	stmt := table.Pg.
+		UPDATE(
+			table.Pg.Status,
+			table.Pg.Output,
+			table.Pg.UpdatedAt,
+		).
 		SET(
 			table.Pg.Status.SET(sqlite.String(string(status))),
 			table.Pg.Output.SET(sqlite.String(output)),

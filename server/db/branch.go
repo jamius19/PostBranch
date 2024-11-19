@@ -5,6 +5,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"time"
 )
 
 type BranchStatus string
@@ -15,13 +16,18 @@ const (
 	BranchMerged BranchStatus = "MERGED"
 	BranchClosed BranchStatus = "CLOSED"
 
-	BranchPgStopped BranchPgStatus = "STOPPED"
-	BranchPgRunning BranchPgStatus = "RUNNING"
-	BranchPgFailed  BranchPgStatus = "FAILED"
+	BranchPgStarting BranchPgStatus = "STARTING"
+	BranchPgStopped  BranchPgStatus = "STOPPED"
+	BranchPgRunning  BranchPgStatus = "RUNNING"
+	BranchPgFailed   BranchPgStatus = "FAILED"
 )
 
 func CreateBranch(ctx context.Context, branch model.Branch) (model.Branch, error) {
 	var newBranch model.Branch
+
+	branch.CreatedAt = time.Now().UTC()
+	branch.UpdatedAt = time.Now().UTC()
+
 	stmt := table.Branch.
 		INSERT(table.Branch.AllColumns).
 		MODEL(branch).
@@ -40,8 +46,8 @@ func CreateBranch(ctx context.Context, branch model.Branch) (model.Branch, error
 
 func UpdateBranchPgStatus(ctx context.Context, branchId int32, status BranchPgStatus) error {
 	stmt := table.Branch.
-		UPDATE(table.Branch.PgStatus).
-		SET(table.Branch.PgStatus.SET(sqlite.String(string(status)))).
+		UPDATE(table.Branch.PgStatus, table.Branch.UpdatedAt).
+		SET(table.Branch.PgStatus.SET(sqlite.String(string(status))), table.Branch.UpdatedAt.SET(sqlite.CURRENT_TIMESTAMP())).
 		WHERE(table.Branch.ID.EQ(sqlite.Int(int64(branchId))))
 
 	log.Tracef("Query: %s", stmt.DebugSql())
@@ -52,6 +58,23 @@ func UpdateBranchPgStatus(ctx context.Context, branchId int32, status BranchPgSt
 	}
 
 	return nil
+}
+
+func GetBranch(ctx context.Context, branchId int32) (model.Branch, error) {
+	var branch model.Branch
+	stmt := table.Branch.
+		SELECT(table.Branch.AllColumns).
+		WHERE(table.Branch.ID.EQ(sqlite.Int(int64(branchId))))
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &branch)
+	if err != nil {
+		log.Errorf("Can't get branch: %s", err)
+		return model.Branch{}, err
+	}
+
+	return branch, nil
 }
 
 func GetBranchPorts(ctx context.Context) ([]int32, error) {

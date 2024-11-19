@@ -85,7 +85,14 @@ func GetClusterSize(pgInit pg.HostImportReqDto) (int64, error) {
 }
 
 func checkPgVersion(pgInit pg.HostImportReqDto) error {
-	output, err := pgSvc.Single(&pgInit, pgSvc.VersionQuery)
+	output, err := cmd.Single(
+		"local-postgres-version",
+		false,
+		false,
+		filepath.Join(pgInit.PostgresPath, "bin", "postgres"),
+		"-V",
+	)
+
 	if err != nil {
 		log.Errorf("Failed to query Postgres version: %v", err)
 		return responseerror.From(errMsg)
@@ -93,7 +100,18 @@ func checkPgVersion(pgInit pg.HostImportReqDto) error {
 
 	if !strings.Contains(output, util.StringVal(pgInit.Version)) {
 		log.Error("Postgres version mismatch")
-		return responseerror.From("Postgres version mismatch")
+		return responseerror.From("Postgres installation version mismatch")
+	}
+
+	output, err = pgSvc.Single(&pgInit, pgSvc.VersionQuery)
+	if err != nil {
+		log.Errorf("Failed to query Postgres version: %v", err)
+		return responseerror.From(errMsg)
+	}
+
+	if !strings.Contains(output, util.StringVal(pgInit.Version)) {
+		log.Error("Postgres version mismatch")
+		return responseerror.From("Database cluster postgres version mismatch")
 	}
 
 	return nil
@@ -263,7 +281,7 @@ func copyPostgresData(
 		return
 	}
 
-	if err := pgSvc.WritePostgresConfig(port, repo.Name, logPath, mainDatasetPath); err != nil {
+	if err := pgSvc.WritePostgresConfig(port, repo.Name, "main", logPath, mainDatasetPath); err != nil {
 		return
 	}
 
@@ -279,9 +297,33 @@ func copyPostgresData(
 	// Set the permissions for the main dataset directory to PostBranch user
 	// as after the backup, the permissions are set to root
 	err = util.SetPermissionsRecursive(mainDatasetPath, pgSvc.PostBranchUser, pgSvc.PostBranchUser)
-
 	if err != nil {
 		log.Errorf("Failed to change dataset permissions. output: %s data: %v", output, err)
+		return
+	}
+
+	// Updating DB
+	updatedPg, err := db.UpdatePgStatus(ctx, *pgInfo.ID, db.PgCompleted, output)
+	if err != nil {
+		log.Errorf("Failed to update status of pgInfo: %v", err)
+	}
+
+	log.Infof("Postgres backup successful for repo: %v", repo)
+
+	log.Infof("Updated pg info, pg: %v", updatedPg)
+
+	branch := model.Branch{
+		Name:      "main",
+		PgPort:    port,
+		RepoID:    *repo.ID,
+		PgStatus:  string(db.BranchPgStarting),
+		DatasetID: dataset.ID,
+		Status:    string(db.BranchOpen),
+	}
+
+	branch, err = db.CreateBranch(ctx, branch)
+	if err != nil {
+		log.Errorf("Failed to create main branch: %v", err)
 		return
 	}
 
@@ -289,8 +331,6 @@ func copyPostgresData(
 	if err != nil {
 		return
 	}
-
-	log.Infof("Postgres backup successful for repo: %v", repo)
 
 	password, err := addSuperuser(pgInit.DbUsername, pgInit.Password, port)
 
@@ -303,28 +343,11 @@ func copyPostgresData(
 		log.Errorf("Failed to add credential: %v", err)
 	}
 
-	branch := model.Branch{
-		Name:      "main",
-		PgPort:    port,
-		RepoID:    *repo.ID,
-		PgStatus:  string(status),
-		DatasetID: dataset.ID,
-		Status:    string(db.BranchOpen),
-	}
-	
-	branch, err = db.CreateBranch(ctx, branch)
+	err = db.UpdateBranchPgStatus(ctx, *branch.ID, status)
 	if err != nil {
-		log.Errorf("Failed to create main branch: %v", err)
+		log.Errorf("Failed to update branch status: %v", err)
 		return
 	}
-
-	// Updating DB
-	updatedPg, err := db.UpdatePgStatus(ctx, *pgInfo.ID, db.PgCompleted, output)
-	if err != nil {
-		log.Errorf("Failed to update status of pgInfo: %v", err)
-	}
-
-	log.Infof("Updated pg info, pg: %v", updatedPg)
 
 	log.Infof("Added %s as a superuser", pgSvc.PostBranchDbUser)
 }

@@ -51,7 +51,37 @@ func GetPgPort(ctx context.Context) (int32, error) {
 	return -1, err
 }
 
-func WritePostgresConfig(port int32, repoName, logPath, datasetPath string) error {
+func UpdatePostgresConfig(datasetPath, configName, configVal string) error {
+	log.Info("Updating postgres config")
+	configPath := filepath.Join(datasetPath, "postgresql.conf")
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read postgres config file: %w", err)
+	}
+
+	lines := strings.Split(string(content), "\n")
+	for i, line := range lines {
+		if strings.Contains(line, configName) {
+			lines[i] = fmt.Sprintf("%s = %s", configName, configVal)
+			break
+		}
+	}
+
+	err = os.WriteFile(configPath, []byte(strings.Join(lines, "\n")), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write postgres config file: %w", err)
+	}
+
+	//if err := util.SetPermissions(configPath, PostBranchUser); err != nil {
+	//	return fmt.Errorf("failed to set permissions on postgres config file: %w", err)
+	//}
+
+	return nil
+
+}
+
+func WritePostgresConfig(port int32, repoName, branchName, logPath, datasetPath string) error {
 	log.Info("Writing postgres config")
 
 	file, err := os.Create(filepath.Join(datasetPath, "postgresql.conf"))
@@ -71,7 +101,7 @@ func WritePostgresConfig(port int32, repoName, logPath, datasetPath string) erro
 	builder.WriteString("password_encryption = 'scram-sha-256'\n")
 
 	builder.WriteString(fmt.Sprintf("log_directory = '%s'\n", logPath))
-	builder.WriteString(fmt.Sprintf("log_filename = '%s_%s'\n", repoName, "%Y-%m-%d_%H-%M-%S.log"))
+	builder.WriteString(fmt.Sprintf("log_filename = '%s_%s__%s.log'\n", repoName, branchName, "%Y-%m-%d_%H-%M-%S"))
 	builder.WriteString("logging_collector = on\n")
 	builder.WriteString("log_rotation_size = 10MB\n")
 	builder.WriteString("log_file_mode = 0600\n")
