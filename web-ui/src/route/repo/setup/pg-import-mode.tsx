@@ -19,16 +19,15 @@ const NormalBgClass = "border border-gray-300 hover:bg-gray-100/80";
 
 
 const PgImportMode = () => {
-    const {repoId: repoIdStr} = useParams<{ repoId?: string }>();
-    const repoId = parseInt(repoIdStr ?? "-1");
+    const {repoName} = useParams<{ repoName: string }>();
 
     const [selectedType, setSelectedType] = useState<PgAdapterName | undefined>();
 
     const getNextLink = () => {
-        if (repoId === -1) {
+        if (!repoName) {
             return `/repo/setup/postgres/${selectedType}`;
         } else {
-            return `/repo/setup/postgres/${repoId}/${selectedType}`;
+            return `/repo/setup/postgres/${repoName}/${selectedType}`;
         }
     }
 

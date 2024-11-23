@@ -8,8 +8,8 @@ export const listRepos = async (): Promise<ResponseDto<RepoResponseDto[]>> => {
     return AxiosInstance.get("/api/repos");
 };
 
-export const getRepo = async (repoId: number): Promise<ResponseDto<RepoResponseDto>> => {
-    return AxiosInstance.get(`/api/repos/${repoId}`);
+export const getRepo = async (repoName: string): Promise<ResponseDto<RepoResponseDto>> => {
+    return AxiosInstance.get(`/api/repos/${repoName}`);
 };
 
 export const initRepo = async (repoPgInitDto: RepoPgInitDto, type: PgAdapterName):
@@ -24,11 +24,11 @@ export const initRepo = async (repoPgInitDto: RepoPgInitDto, type: PgAdapterName
 
 export const reimport = async (
     pgInitDto: PgAdapters,
-    repoId: number,
+    repoName: string,
     type: PgAdapterName,
 ): Promise<ResponseDto<RepoResponseDto>> => {
 
-    return AxiosInstance.post(`/api/repos/import/${repoId}/${type}`, pgInitDto, {
+    return AxiosInstance.post(`/api/repos/import/${repoName}/${type}`, pgInitDto, {
         headers: {
             "Content-Type": "application/json"
         }
@@ -46,7 +46,7 @@ export const validatePg = async <T extends PgAdapters, >
     });
 }
 
-export const deleteRepo = async (repoId: number): Promise<ResponseDto<number>> => {
-    return AxiosInstance.delete(`/api/repos/${repoId}`);
+export const deleteRepo = async (repoName: string): Promise<ResponseDto<number>> => {
+    return AxiosInstance.delete(`/api/repos/${repoName}`);
 }
 

@@ -30,13 +30,13 @@ func Validate(pgInit pg.HostImportReqDto) error {
 		return err
 	}
 
-	if err := checkPgSuperuser(pgInit); err != nil {
-		return err
-	}
-
-	if err := checkPgReplication(pgInit); err != nil {
-		return err
-	}
+	//if err := checkPgSuperuser(pgInit); err != nil {
+	//	return err
+	//}
+	//
+	//if err := checkPgReplication(pgInit); err != nil {
+	//	return err
+	//}
 
 	return nil
 }
@@ -222,12 +222,6 @@ func copyPostgresData(
 
 	port, err := pgSvc.GetPgPort(ctx)
 	if err != nil {
-		return
-	}
-
-	// Cleaning the new dataset directory
-	if err := util.RemoveFile(mainDatasetPath); err != nil {
-		log.Errorf("Failed to cleanup main dataset directory: %v", err)
 		return
 	}
 

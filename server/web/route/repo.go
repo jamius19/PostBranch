@@ -15,7 +15,6 @@ import (
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
-	"strconv"
 )
 
 var log = logger.Logger
@@ -145,19 +144,19 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
-	log.Infof("Re-Initializing host repo with ID: %s", chi.URLParam(r, "repoId"))
-
-	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
-	if err != nil {
+	repoName := chi.URLParam(r, "repoName")
+	if repoName == "" {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repo Id should be a number"),
+			responseerror.From("Repository Name is required"),
 			http.StatusBadRequest,
 		)
 
 		return
 	}
+
+	log.Infof("Re-Initializing host repo with name: %s", repoName)
 
 	var pgConfig pg.HostImportReqDto
 	if err := json.NewDecoder(r.Body).Decode(&pgConfig); err != nil {
@@ -170,15 +169,16 @@ func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
+		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
+
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Invalid repository id"),
-			http.StatusInternalServerError,
+			responseerror.From("Invalid Repository Name"),
+			http.StatusNotFound,
 		)
-
 		return
 	}
 
@@ -287,21 +287,21 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetRepo(w http.ResponseWriter, r *http.Request) {
-	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
-	if err != nil {
+	repoName := chi.URLParam(r, "repoName")
+	if repoName == "" {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repository ID should be a number"),
+			responseerror.From("Repository Name is required"),
 			http.StatusBadRequest,
 		)
 
 		return
 	}
 
-	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
-		log.Error("Failed to load repo, Invalid Repository ID: %d", repoId)
+		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
 
 		util.WriteError(
 			w,
@@ -323,26 +323,26 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func DeleteRepo(w http.ResponseWriter, r *http.Request) {
-	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
-	if err != nil {
+	repoName := chi.URLParam(r, "repoName")
+	if repoName == "" {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repo Id should be a number"),
+			responseerror.From("Repository Name is required"),
 			http.StatusBadRequest,
 		)
 
 		return
 	}
 
-	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
-		log.Error("Failed to load repo, Invalid Repository Id: %d", repoId)
+		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
 
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Invalid Repository ID"),
+			responseerror.From("Invalid Repository Name"),
 			http.StatusNotFound,
 		)
 		return
@@ -360,7 +360,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db.DeleteRepo(r.Context(), repoId)
+	err = db.DeleteRepo(r.Context(), int64(*repoDetail.Repo.ID))
 	if err != nil {
 		util.WriteError(
 			w,

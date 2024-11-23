@@ -11,13 +11,12 @@ import Spinner from "@/components/spinner.tsx";
 type UsePgAdapterStateReturnType = [({pgResponse}: { pgResponse: PgResponseDto }) => JSX.Element]
 
 const usePgAdapterState = (adapter: PgAdapterName): UsePgAdapterStateReturnType => {
-    const {repoId} = useParams<{ repoId?: string }>();
-    // -1 means that the repo is not created yet, and it's not re-import workflow
-    const repoIdInt = parseInt(repoId ?? "-1");
+    // Undefined repoName means that the repo is not created yet, and it's not re-import workflow
+    const {repoName} = useParams<{ repoName: string }>();
 
     const repoReimport = useNotifiableMutation({
         mutationKey: ["pg-reimport"],
-        mutationFn: (pgConfig: PgAdapters) => reimport(pgConfig, repoIdInt, adapter),
+        mutationFn: (pgConfig: PgAdapters) => reimport(pgConfig, repoName!, adapter),
         messages: {
             pending: "Starting Postgres import",
             success: "Postgres import started successfully",
@@ -33,7 +32,7 @@ const usePgAdapterState = (adapter: PgAdapterName): UsePgAdapterStateReturnType 
     const Nav = ({pgResponse}: { pgResponse: PgResponseDto }) => {
         return (
             <div className={"flex gap-4"}>
-                {repoIdInt === -1 ? (
+                {!repoName ? (
                     <Link to={"/repo/setup/storage"}
                           state={{pgResponse, adapter}}>
                         <Button>
@@ -53,7 +52,7 @@ const usePgAdapterState = (adapter: PgAdapterName): UsePgAdapterStateReturnType 
                         </Button>
 
                         {repoReimport.isSuccess && (
-                            <Link to={`/repo/${repoIdInt}`}>
+                            <Link to={`/repo/${repoName}`}>
                                 <Button>
                                     Go to Repository <ArrowRight/>
                                 </Button>

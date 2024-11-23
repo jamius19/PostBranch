@@ -12,16 +12,15 @@ import (
 	"github.com/jamius19/postbranch/util"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"net/http"
-	"strconv"
 )
 
 func CreateBranch(w http.ResponseWriter, r *http.Request) {
-	repoId, err := strconv.ParseInt(chi.URLParam(r, "repoId"), 10, 64)
-	if err != nil {
+	repoName := chi.URLParam(r, "repoName")
+	if repoName == "" {
 		util.WriteError(
 			w,
 			r,
-			responseerror.From("Repo Id should be a number"),
+			responseerror.From("Repository Name is required"),
 			http.StatusBadRequest,
 		)
 
@@ -39,7 +38,18 @@ func CreateBranch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDetail, err := db.GetRepo(r.Context(), repoId)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
+	if err != nil {
+		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
+
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Invalid Repository Name"),
+			http.StatusNotFound,
+		)
+		return
+	}
 
 	// TODO: Add validation for parent branch status
 

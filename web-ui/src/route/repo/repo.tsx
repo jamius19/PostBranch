@@ -1,6 +1,6 @@
 import {Navigate, useNavigate, useParams} from "react-router-dom";
 import React, {JSX, useMemo} from "react";
-import {formatValue, isInteger} from "@/util/lib.ts";
+import {formatValue} from "@/util/lib.ts";
 import {useQuery} from "@tanstack/react-query";
 import {deleteRepo, getRepo} from "@/service/repo-service.ts";
 import Spinner from "@/components/spinner.tsx";
@@ -28,7 +28,7 @@ import {clsx} from "clsx";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import Link from "@/components/link.tsx";
 import {twMerge as tm} from "tailwind-merge";
-import {DialogFooter, DialogHeader, DialogTitle,} from "@/components/ui/dialog"
+import {DialogFooter, DialogHeader, DialogTitle,} from "@/components/ui/dialog.tsx"
 import {Badge} from "@/components/ui/badge.tsx";
 import CopyToClipboard from "@/components/copy-to-clipboard.tsx";
 import TooltipDialog from "@/components/tooltip-dialog.tsx";
@@ -37,15 +37,18 @@ import NewBranch from "@/components/new-branch.tsx";
 
 
 const Repo = () => {
-    const navigate = useNavigate();
+    const {repoName} = useParams<{ repoName: string }>();
 
+    if (!repoName) {
+        throw new Error("Repo name is required");
+    }
+
+    const navigate = useNavigate();
     dayjs.extend(utc);
-    const {repoId: repoIdStr} = useParams<{ repoId: string }>();
-    const repoId = parseInt(repoIdStr!);
 
     const repoDeleteQuery = useNotifiableMutation({
-        mutationKey: ["repo-delete", repoId],
-        mutationFn: () => deleteRepo(repoId),
+        mutationKey: ["repo-delete", repoName],
+        mutationFn: deleteRepo,
         invalidates: ["repo-list"],
         messages: {
             pending: "Deleting repository",
@@ -57,14 +60,14 @@ const Repo = () => {
     });
 
     const repoQuery = useQuery({
-        queryKey: ["repo", repoId],
-        queryFn: () => getRepo(repoId),
+        queryKey: ["repo", repoName],
+        queryFn: () => getRepo(repoName),
         refetchInterval: 2000,
         enabled: !repoDeleteQuery.isPending && !repoDeleteQuery.isSuccess,
     });
 
     const handleDelete = () => {
-        repoDeleteQuery.mutate(repoId);
+        repoDeleteQuery.mutate(repoName);
     }
 
     const repo = repoQuery.data?.data;
@@ -98,10 +101,6 @@ const Repo = () => {
         }
 
         return branch.name;
-    }
-
-    if (!isInteger(repoIdStr)) {
-        return <Navigate to={"/error"} state={{message: "The repository ID in the URL is invalid."}}/>;
     }
 
     if (repoQuery.isPending || disableInteraction || repoDeleteQuery.isSuccess) {
@@ -157,7 +156,7 @@ const Repo = () => {
                         <h1>Branches</h1>
 
                         <div className={"relative bottom-0.5 ml-auto"}>
-                            <NewBranch repoId={repo.id} branches={repo.branches} branchMap={branchMap}/>
+                            <NewBranch repoName={repo.name} branches={repo.branches} branchMap={branchMap}/>
                         </div>
                     </div>
 
@@ -227,7 +226,7 @@ const Repo = () => {
 
                     <Link
                         disabled={disableInteraction}
-                        to={`/repo/setup/${repoId}/postgres`}
+                        to={`/repo/setup/${repoName}/postgres`}
                         className={"mt-4 block"}>
                         <Button disabled={disableInteraction}>
                             Change Postgres Config <ArrowRight/>

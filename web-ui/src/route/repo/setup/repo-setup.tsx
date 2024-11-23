@@ -312,7 +312,7 @@ const RepoSetup = (): JSX.Element => {
                         </Button>
 
                         {repoInitSuccess && (
-                            <Link to={`/repo/${repoInit.data?.data!.id}`}>
+                            <Link to={`/repo/${repoInit.data.data!.name}`}>
                                 <Button>
                                     Go to Repository <ArrowRight/>
                                 </Button>

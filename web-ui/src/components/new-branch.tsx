@@ -30,7 +30,7 @@ import {initBranch} from "@/service/branch-service.ts";
 import Spinner from "@/components/spinner.tsx";
 
 interface NewBranchProps {
-    repoId: number;
+    repoName: string;
     branches: Branch[];
     branchMap: Map<number, Branch>;
 }
@@ -40,17 +40,17 @@ const defaultValues: BranchInitDto = {
     parentId: -1,
 }
 
-const NewBranch = ({repoId, branches, branchMap}: NewBranchProps) => {
+const NewBranch = ({repoName, branches, branchMap}: NewBranchProps) => {
     const [dialogOpen, setDialogOpen] = useState(false);
 
     const branchInit = useNotifiableMutation({
         mutationKey: ["branch-init"],
-        mutationFn: (branchConfig: BranchInitDto) => initBranch(repoId, branchConfig),
+        mutationFn: (branchConfig: BranchInitDto) => initBranch(repoName, branchConfig),
         messages: {
             pending: "Creating Branch",
             success: "Branch created successfully",
         },
-        invalidates: ["repo", `${repoId}`],
+        invalidates: ["repo", repoName],
     });
 
     const formSchema = useMemo((): z.ZodType<BranchInitDto> => z.object({

@@ -2,7 +2,7 @@ import {createBrowserRouter} from "react-router-dom";
 import RepoList from "@/route/repo/repo-list.tsx";
 import Layout from "./layout/layout.tsx";
 import Error from "./route/error/error.tsx";
-import Repo from "@/route/repo/[id]/repo.tsx";
+import Repo from "@/route/repo/repo.tsx";
 import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
 import PgSetupHost from "@/route/repo/setup/pg/pg-setup-host.tsx";
 import PgImportMode from "@/route/repo/setup/pg-import-mode.tsx";
@@ -22,7 +22,7 @@ const router = createBrowserRouter([
                 element: <RepoSetup/>,
             },
             {
-                path: "/repo/:repoId",
+                path: "/repo/:repoName",
                 element: <Repo/>,
             },
             {
@@ -34,11 +34,11 @@ const router = createBrowserRouter([
                 element: <PgSetupHost/>,
             },
             {
-                path: "/repo/setup/:repoId/postgres",
+                path: "/repo/setup/:repoName/postgres",
                 element: <PgImportMode/>,
             },
             {
-                path: "/repo/setup/postgres/:repoId/host",
+                path: "/repo/setup/postgres/:repoName/host",
                 element: <PgSetupHost/>,
             },
             {

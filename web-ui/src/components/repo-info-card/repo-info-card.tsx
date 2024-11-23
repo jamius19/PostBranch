@@ -21,7 +21,7 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
     }
 
     return (
-        <Link to={`/repo/${repo.id}`}>
+        <Link to={`/repo/${repo.name}`}>
             <div
                 className={tm("cursor-pointer w-full h-full text-white shadow-lg hover:shadow-xl transition-all duration-500 rounded-lg p-6", bgClassNames)}>
                 <h3 className="font-title text mono font-bold">{repo.name}</h3>

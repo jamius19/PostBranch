@@ -5,6 +5,7 @@ import (
 	"github.com/go-jet/jet/v2/sqlite"
 	"github.com/jamius19/postbranch/db/gen/model"
 	"github.com/jamius19/postbranch/db/gen/table"
+	"strings"
 	"time"
 )
 
@@ -55,6 +56,33 @@ func GetRepo(ctx context.Context, repoId int64) (RepoDetail, error) {
 			INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)).
 			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
 		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId))).
+		ORDER_BY(table.Branch.CreatedAt.DESC())
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &repoDetail)
+	if err != nil {
+		log.Errorf("Can't query repos: %s", err)
+		return RepoDetail{}, err
+	}
+
+	return repoDetail, nil
+}
+
+func GetRepoByName(ctx context.Context, repoName string) (RepoDetail, error) {
+	var repoDetail RepoDetail
+
+	stmt := sqlite.SELECT(
+		table.Repo.AllColumns,
+		table.ZfsPool.AllColumns.As("pool"),
+		table.Pg.AllColumns,
+		table.Branch.AllColumns.As("branches"),
+	).
+		FROM(table.Repo.
+			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+			INNER_JOIN(table.Pg, table.Pg.RepoID.EQ(table.Repo.ID)).
+			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
+		WHERE(table.Repo.Name.EQ(sqlite.String(strings.TrimSpace(repoName)))).
 		ORDER_BY(table.Branch.CreatedAt.DESC())
 
 	log.Tracef("Query: %s", stmt.DebugSql())

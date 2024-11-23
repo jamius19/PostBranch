@@ -48,7 +48,7 @@ const RepoList = () => {
                 </Link>
             </div>
 
-            {!!repos && !!repos.length && (
+            {!!repos.length && (
                 <div className={"mb-12"}>
                     <div className={clsx("grid gap-6", styles.repoGrid)}>
                         {repos.map(repo => (
@@ -58,7 +58,7 @@ const RepoList = () => {
                 </div>
             )}
 
-            {!!repos && !repos.length && (
+            {!repos.length && (
                 <div className={"mt-40 flex flex-col items-center"}>
                     <img src={"/images/purrcy_confused.png"} width={"350px"} alt={"Purrcy is confused"}/>
                     <p className={"text-center"}>No repositories found. Create one?</p>
