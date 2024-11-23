@@ -14,6 +14,11 @@ import (
 type Repo struct {
 	ID        *int32 `sql:"primary_key"`
 	Name      string
+	PgPath    string
+	Version   int32
+	Status    string
+	Output    *string
+	Adapter   string
 	PoolID    int32
 	CreatedAt time.Time
 	UpdatedAt time.Time

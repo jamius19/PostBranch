@@ -1,5 +1,5 @@
 import {ResponseDto} from "@/@types/response-dto.ts";
-import {RepoResponseDto} from "@/@types/repo/repo-dto.ts";
+import {RepoResponseDto} from "@/@types/repo/repo-response-dto.ts";
 import {RepoPgInitDto} from "@/@types/repo/repo-init-dto.ts";
 import AxiosInstance from "@/service/axios-service.ts";
 import {PgAdapterName, PgAdapters, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";

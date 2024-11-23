@@ -1,5 +1,5 @@
 import {ResponseDto} from "@/@types/response-dto.ts";
-import {Branch} from "@/@types/repo/repo-dto.ts";
+import {Branch} from "@/@types/repo/repo-response-dto.ts";
 import AxiosInstance from "@/service/axios-service.ts";
 import {BranchInitDto} from "@/@types/repo/branch-init-dto.ts";
 

@@ -22,7 +22,7 @@ import {
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table.tsx";
 import dayjs from "dayjs";
 import utc from 'dayjs/plugin/utc'
-import {Branch, BranchPgStatus, PgStatus, RepoResponseDto} from "@/@types/repo/repo-dto.ts";
+import {Branch, BranchPgStatus, RepoStatus, RepoResponseDto} from "@/@types/repo/repo-response-dto.ts";
 import {Button} from "@/components/ui/button.tsx";
 import {clsx} from "clsx";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
@@ -124,9 +124,9 @@ const Repo = () => {
                 </Button>
             </div>
 
-            <PgInfoBlock status={repo.pg.status}/>
+            <PgInfoBlock status={repo.status}/>
 
-            <div className={"flex mt-3 mb-24 flex-col gap-2 text-sm"}>
+            <div className={"flex mt-3 mb-20 flex-col gap-2 text-sm"}>
                 <div>
                     <Box
                         className={"inline-block relative top-[-1px] me-2.5"}
@@ -138,18 +138,18 @@ const Repo = () => {
                     <Database
                         className={"inline-block relative top-[-1.5px] me-2.5"}
                         size={15}/>
-                    Postgres {repo.pg.version}
+                    Postgres {repo.pgVersion}
                 </div>
 
                 <div>
                     <HardDrive
                         className={"inline-block relative top-[-1.5px] me-2.5"}
                         size={15}/>
-                    <code className={"text-[0.85 rem]"}>{repo.pool.mountPath}</code>
+                    <code className={"text-[0.83rem]"}>{repo.pool.mountPath}</code>
                 </div>
             </div>
 
-            {repo.pg.status === "COMPLETED" && (
+            {repo.status === "READY" && (
                 <div className={""}>
                     <div className={"mb-2 flex items-center gap-3"}>
                         <GitBranch size={22} className={"relative top-[-5.5px]"}/>
@@ -209,7 +209,7 @@ const Repo = () => {
                 </div>
             )}
 
-            {repo.pg.status === "FAILED" && (
+            {repo.status === "FAILED" && (
                 <div>
                     <div>
                         Output of the last import attempt. Please consult the PostBranch log for more details.
@@ -217,7 +217,7 @@ const Repo = () => {
 
                     <div
                         className="mt-3  min-h-[300px] max-h-[800px] overflow-x-clip overflow-y-auto border border-gray-400/50 rounded-md p-4 mono text-xs flex flex-col gap-1">
-                        {repo.pg.output.split(";").map((line, index) => {
+                        {repo.output.split(";").map((line, index) => {
                             const mainError = !line.match(/.*<nil>$/);
 
                             return <p key={index} className={clsx(mainError && "text-red-700 font-bold")}>{line}</p>;
@@ -238,7 +238,7 @@ const Repo = () => {
     );
 };
 
-const PgInfoBlock = ({status}: { status?: PgStatus }) => {
+const PgInfoBlock = ({status}: { status?: RepoStatus }): JSX.Element => {
     if (!status) {
         return (
             <div>
@@ -251,7 +251,7 @@ const PgInfoBlock = ({status}: { status?: PgStatus }) => {
     }
 
 
-    if (status === "COMPLETED") {
+    if (status === "READY") {
         return (
             <div>
                 <p className={"bg-lime-600 text-white inline-block ps-2 pe-3 py-1.5 rounded-md text-xs"}>

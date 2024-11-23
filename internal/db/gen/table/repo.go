@@ -19,6 +19,11 @@ type repoTable struct {
 	// Columns
 	ID        sqlite.ColumnInteger
 	Name      sqlite.ColumnString
+	PgPath    sqlite.ColumnString
+	Version   sqlite.ColumnInteger
+	Status    sqlite.ColumnString
+	Output    sqlite.ColumnString
+	Adapter   sqlite.ColumnString
 	PoolID    sqlite.ColumnInteger
 	CreatedAt sqlite.ColumnTimestamp
 	UpdatedAt sqlite.ColumnTimestamp
@@ -64,11 +69,16 @@ func newRepoTableImpl(schemaName, tableName, alias string) repoTable {
 	var (
 		IDColumn        = sqlite.IntegerColumn("id")
 		NameColumn      = sqlite.StringColumn("name")
+		PgPathColumn    = sqlite.StringColumn("pg_path")
+		VersionColumn   = sqlite.IntegerColumn("version")
+		StatusColumn    = sqlite.StringColumn("status")
+		OutputColumn    = sqlite.StringColumn("output")
+		AdapterColumn   = sqlite.StringColumn("adapter")
 		PoolIDColumn    = sqlite.IntegerColumn("pool_id")
 		CreatedAtColumn = sqlite.TimestampColumn("created_at")
 		UpdatedAtColumn = sqlite.TimestampColumn("updated_at")
-		allColumns      = sqlite.ColumnList{IDColumn, NameColumn, PoolIDColumn, CreatedAtColumn, UpdatedAtColumn}
-		mutableColumns  = sqlite.ColumnList{NameColumn, PoolIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		allColumns      = sqlite.ColumnList{IDColumn, NameColumn, PgPathColumn, VersionColumn, StatusColumn, OutputColumn, AdapterColumn, PoolIDColumn, CreatedAtColumn, UpdatedAtColumn}
+		mutableColumns  = sqlite.ColumnList{NameColumn, PgPathColumn, VersionColumn, StatusColumn, OutputColumn, AdapterColumn, PoolIDColumn, CreatedAtColumn, UpdatedAtColumn}
 	)
 
 	return repoTable{
@@ -77,6 +87,11 @@ func newRepoTableImpl(schemaName, tableName, alias string) repoTable {
 		//Columns
 		ID:        IDColumn,
 		Name:      NameColumn,
+		PgPath:    PgPathColumn,
+		Version:   VersionColumn,
+		Status:    StatusColumn,
+		Output:    OutputColumn,
+		Adapter:   AdapterColumn,
 		PoolID:    PoolIDColumn,
 		CreatedAt: CreatedAtColumn,
 		UpdatedAt: UpdatedAtColumn,

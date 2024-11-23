@@ -1,4 +1,4 @@
-import {RepoResponseDto} from "@/@types/repo/repo-dto.ts";
+import {RepoResponseDto} from "@/@types/repo/repo-response-dto.ts";
 import {Activity, Box, Database, GitBranch} from "lucide-react";
 import {twMerge as tm} from "tailwind-merge";
 import {Link} from "react-router-dom";
@@ -12,9 +12,9 @@ interface RepoInfoCardProps {
 const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
     let bgClassNames;
 
-    if (repo.pg.status === 'FAILED') {
+    if (repo.status === 'FAILED') {
         bgClassNames = "border-2 border-red-600 border-dashed text-red-600 shadow-red-500/20 hover:shadow-red-500/20"
-    } else if (repo.pg.status === 'COMPLETED') {
+    } else if (repo.status === 'READY') {
         bgClassNames = "bg-gray-700 hover:bg-gray-800"
     } else {
         bgClassNames = "bg-gray-500 hover:bg-gray-600"
@@ -35,7 +35,7 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
                 </div>
                 <div className={"mt-1 text-[0.85rem]"}>
                     <Database size={15} className={"inline-block relative top-[-1.5px]"}/>
-                    <span className={"ml-2"}>Postgres {repo.pg.version}</span>
+                    <span className={"ml-2"}>Postgres {repo.pgVersion}</span>
                 </div>
 
                 <div className={"mt-1 text-[0.85rem]"}>
@@ -45,15 +45,15 @@ const RepoInfoCard = ({repo}: RepoInfoCardProps) => {
 
                 <div className={"mt-1 text-[0.85rem] font-bold"}>
                     <Activity size={15} className={"inline-block relative top-[-1.5px]"}/>
-                    {repo.pg.status === "STARTED" && (
+                    {repo.status === "STARTED" && (
                         <span className={"ml-2"}>Postgres data import in progress</span>
                     )}
 
-                    {repo.pg.status === "COMPLETED" && (
+                    {repo.status === "READY" && (
                         <span className={"ml-2"}>Repository is ready</span>
                     )}
 
-                    {repo.pg.status === "FAILED" && (
+                    {repo.status === "FAILED" && (
                         <span className={"ml-2"}>Postgres data importing failed</span>
                     )}
                 </div>

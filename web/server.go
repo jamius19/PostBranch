@@ -54,7 +54,7 @@ func Initialize(rootCtx context.Context, webWg *sync.WaitGroup) {
 	// Wait for interrupt signal
 	select {
 	case <-rootCtx.Done():
-		log.Info("Received interrupt/terminate signal, shutting down...")
+		log.Info("Server shutting down")
 	}
 
 	err = zfs.UnmountAll()
@@ -62,7 +62,6 @@ func Initialize(rootCtx context.Context, webWg *sync.WaitGroup) {
 		log.Errorf("Failed to unmount ZFS pool(s). error: %s", err)
 	}
 
-	// Create shutdown context as child of root context
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 

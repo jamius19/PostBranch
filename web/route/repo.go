@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	db2 "github.com/jamius19/postbranch/internal/db"
+	"github.com/jamius19/postbranch/internal/db"
 	"github.com/jamius19/postbranch/internal/dto"
 	"github.com/jamius19/postbranch/internal/dto/pg"
-	repo2 "github.com/jamius19/postbranch/internal/dto/repo"
+	repoDto "github.com/jamius19/postbranch/internal/dto/repo"
 	"github.com/jamius19/postbranch/internal/logger"
 	"github.com/jamius19/postbranch/internal/service/pg/adapter/host"
 	"github.com/jamius19/postbranch/internal/service/repo"
@@ -22,7 +22,7 @@ var log = logger.Logger
 func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 	log.Info("Initializing host repo")
 
-	var repoInit repo2.InitDto[pg.HostImportReqDto]
+	var repoInit repoDto.InitDto[pg.HostImportReqDto]
 
 	if err := json.NewDecoder(r.Body).Decode(&repoInit); err != nil {
 		util.WriteError(w, r, err, http.StatusBadRequest)
@@ -34,7 +34,7 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sameRepoCount, err := db2.CountRepoByNameOrPath(r.Context(), repoInit.RepoConfig.Name, repoInit.RepoConfig.Path)
+	sameRepoCount, err := db.CountRepoByNameOrPath(r.Context(), repoInit.RepoConfig.Name, repoInit.RepoConfig.Path)
 	if err != nil {
 		log.Errorf("Error fetching similar repository. RepoInitDto: %v", &repoInit)
 		util.WriteError(
@@ -80,7 +80,7 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requiredSize := max(clusterSize+repo2.MinSizeInMb, 500)
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
 
 	if repoInit.RepoConfig.SizeInMb < requiredSize {
 		log.Errorf("Requested size of %d MB is too small. Cluster size should be at least %d MB",
@@ -99,43 +99,33 @@ func InitializeHostRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdRepo, pool, err := repo.InitializeRepo(r.Context(), &repoInit)
+	repoInfo, pool, err := repo.InitializeRepo(r.Context(), &repoInit, &repoInit.PgConfig)
 
 	if err != nil {
 		util.WriteError(w, r, err, http.StatusInternalServerError)
 		return
 	}
 
-	createdPg, err := host.Import(r.Context(), repoInit.PgConfig, createdRepo, pool, nil)
-	if err != nil {
-		util.WriteError(w, r, err, http.StatusInternalServerError)
-		return
-	}
+	host.Import(repoInit.PgConfig, repoInfo, pool)
 
-	pgResponse := repo2.Pg{
-		ID:      createdPg.ID,
-		Version: createdPg.Version,
-		Status:  db2.PgStatus(createdPg.Status),
-		Output:  createdPg.Output,
-	}
-
-	poolResponse := repo2.Pool{
+	poolResponse := repoDto.Pool{
 		ID:       pool.ID,
 		Type:     pool.PoolType,
 		SizeInMb: pool.SizeInMb,
 		Path:     pool.Path,
 	}
 
-	repoResponse := repo2.Response{
-		ID:        createdRepo.ID,
-		Name:      createdRepo.Name,
+	repoResponse := repoDto.Response{
+		ID:        repoInfo.ID,
+		Name:      repoInfo.Name,
 		Pool:      poolResponse,
-		Pg:        pgResponse,
-		CreatedAt: createdRepo.CreatedAt,
-		UpdatedAt: createdRepo.UpdatedAt,
+		Output:    repoInfo.Output,
+		Status:    db.RepoStatus(repoInfo.Status),
+		CreatedAt: repoInfo.CreatedAt,
+		UpdatedAt: repoInfo.UpdatedAt,
 	}
 
-	response := dto.Response[repo2.Response]{
+	response := dto.Response[repoDto.Response]{
 		Data:  &repoResponse,
 		Error: nil,
 	}
@@ -169,7 +159,7 @@ func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDetail, err := db2.GetRepoByName(r.Context(), repoName)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
 		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
 
@@ -205,7 +195,7 @@ func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requiredSize := max(clusterSize+repo2.MinSizeInMb, 500)
+	requiredSize := max(clusterSize+repoDto.MinSizeInMb, 500)
 
 	if repoDetail.Pool.SizeInMb < requiredSize {
 		log.Errorf("Database Cluster size is %d MB, but the repository size is %d MB. Please increase the repository size",
@@ -224,36 +214,27 @@ func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedPg, err := host.Import(r.Context(), pgConfig, repoDetail.Repo, repoDetail.Pool, &repoDetail.Pg)
-	if err != nil {
-		util.WriteError(w, r, err, http.StatusInternalServerError)
-		return
-	}
+	host.Import(pgConfig, repoDetail.Repo, repoDetail.Pool)
 
-	pgResponse := repo2.Pg{
-		ID:      updatedPg.ID,
-		Version: updatedPg.Version,
-		Status:  db2.PgStatus(updatedPg.Status),
-		Output:  updatedPg.Output,
-	}
-
-	poolResponse := repo2.Pool{
+	poolResponse := repoDto.Pool{
 		ID:       repoDetail.Pool.ID,
 		Type:     repoDetail.Pool.PoolType,
 		SizeInMb: repoDetail.Pool.SizeInMb,
 		Path:     repoDetail.Pool.Path,
 	}
 
-	repoResponse := repo2.Response{
+	repoResponse := repoDto.Response{
 		ID:        repoDetail.Repo.ID,
 		Name:      repoDetail.Repo.Name,
 		Pool:      poolResponse,
-		Pg:        pgResponse,
+		PgVersion: pgConfig.Version,
+		Status:    db.RepoStatus(repoDetail.Repo.Status),
+		Output:    repoDetail.Repo.Output,
 		CreatedAt: repoDetail.Repo.CreatedAt,
 		UpdatedAt: repoDetail.Repo.UpdatedAt,
 	}
 
-	response := dto.Response[repo2.Response]{
+	response := dto.Response[repoDto.Response]{
 		Data:  &repoResponse,
 		Error: nil,
 	}
@@ -262,7 +243,7 @@ func ReInitializeHostPg(w http.ResponseWriter, r *http.Request) {
 }
 
 func ListRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := db2.ListRepo(r.Context())
+	repos, err := db.ListRepo(r.Context())
 
 	if err != nil {
 		log.Error(err)
@@ -270,14 +251,14 @@ func ListRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoResponseList := []repo2.Response{}
+	repoResponseList := []repoDto.Response{}
 
 	for _, repoDetail := range repos {
 		repoResponse := getRepoResponse(repoDetail)
 		repoResponseList = append(repoResponseList, repoResponse)
 	}
 
-	response := dto.Response[[]repo2.Response]{
+	response := dto.Response[[]repoDto.Response]{
 		Data:   &repoResponseList,
 		Error:  nil,
 		IsList: true,
@@ -299,7 +280,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDetail, err := db2.GetRepoByName(r.Context(), repoName)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
 		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
 
@@ -314,7 +295,7 @@ func GetRepo(w http.ResponseWriter, r *http.Request) {
 
 	repoResponse := getRepoResponse(repoDetail)
 
-	response := dto.Response[repo2.Response]{
+	response := dto.Response[repoDto.Response]{
 		Data:  &repoResponse,
 		Error: nil,
 	}
@@ -335,7 +316,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repoDetail, err := db2.GetRepoByName(r.Context(), repoName)
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
 	if err != nil {
 		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
 
@@ -360,7 +341,7 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = db2.DeleteRepo(r.Context(), int64(*repoDetail.Repo.ID))
+	err = db.DeleteRepo(r.Context(), *repoDetail.Repo.ID)
 	if err != nil {
 		util.WriteError(
 			w,
@@ -380,18 +361,10 @@ func DeleteRepo(w http.ResponseWriter, r *http.Request) {
 	util.WriteResponse(w, r, response, http.StatusOK)
 }
 
-func getRepoResponse(repoDetail db2.RepoDetail) repo2.Response {
-	var pgInfo repo2.Pg
-	branchesInfo := []repo2.Branch{}
+func getRepoResponse(repoDetail db.RepoDetail) repoDto.Response {
+	branchesInfo := []repoDto.Branch{}
 
-	pgInfo = repo2.Pg{
-		ID:      repoDetail.Pg.ID,
-		Version: repoDetail.Pg.Version,
-		Status:  db2.PgStatus(repoDetail.Pg.Status),
-		Output:  repoDetail.Pg.Output,
-	}
-
-	poolInfo := repo2.Pool{
+	poolInfo := repoDto.Pool{
 		ID:        repoDetail.Pool.ID,
 		Type:      repoDetail.Pool.PoolType,
 		Path:      repoDetail.Pool.Path,
@@ -400,11 +373,11 @@ func getRepoResponse(repoDetail db2.RepoDetail) repo2.Response {
 	}
 
 	for _, branch := range repoDetail.Branches {
-		branchesInfo = append(branchesInfo, repo2.Branch{
+		branchesInfo = append(branchesInfo, repoDto.Branch{
 			ID:        branch.ID,
 			Name:      branch.Name,
-			Status:    db2.BranchStatus(branch.Status),
-			PgStatus:  db2.BranchPgStatus(branch.PgStatus),
+			Status:    db.BranchStatus(branch.Status),
+			PgStatus:  db.BranchPgStatus(branch.PgStatus),
 			Port:      branch.PgPort,
 			ParentID:  branch.ParentID,
 			CreatedAt: branch.CreatedAt,
@@ -412,10 +385,12 @@ func getRepoResponse(repoDetail db2.RepoDetail) repo2.Response {
 		})
 	}
 
-	repoResponse := repo2.Response{
+	repoResponse := repoDto.Response{
 		ID:        repoDetail.Repo.ID,
 		Name:      repoDetail.Repo.Name,
-		Pg:        pgInfo,
+		PgVersion: repoDetail.Repo.Version,
+		Status:    db.RepoStatus(repoDetail.Repo.Status),
+		Output:    repoDetail.Repo.Output,
 		Branches:  branchesInfo,
 		Pool:      poolInfo,
 		CreatedAt: repoDetail.Repo.CreatedAt,

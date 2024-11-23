@@ -3,14 +3,14 @@ package db
 import (
 	"context"
 	"github.com/go-jet/jet/v2/sqlite"
-	model2 "github.com/jamius19/postbranch/internal/db/gen/model"
-	table2 "github.com/jamius19/postbranch/internal/db/gen/table"
+	"github.com/jamius19/postbranch/internal/db/gen/model"
+	"github.com/jamius19/postbranch/internal/db/gen/table"
 	"time"
 )
 
 type PoolDetail struct {
-	Pool model2.ZfsPool `alias:"pool"`
-	Pg   model2.Pg      `alias:"pg"`
+	Repo model.Repo    `alias:"repo"`
+	Pool model.ZfsPool `alias:"pool"`
 }
 
 func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
@@ -18,13 +18,13 @@ func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
 
 	stmt := sqlite.
 		SELECT(
-			table2.ZfsPool.AllColumns.As("pool"),
-			table2.Pg.AllColumns.As("pg"),
+			table.ZfsPool.AllColumns.As("pool"),
+			table.Repo.AllColumns.As("repo"),
 		).
 		FROM(
-			table2.ZfsPool.
-				INNER_JOIN(table2.Repo, table2.Repo.PoolID.EQ(table2.ZfsPool.ID)).
-				INNER_JOIN(table2.Pg, table2.Pg.RepoID.EQ(table2.Repo.ID)),
+			table.ZfsPool.
+				INNER_JOIN(table.Repo, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+				INNER_JOIN(table.Repo, table.Repo.PoolID.EQ(table.ZfsPool.ID)),
 		)
 
 	log.Tracef("Query: %s", stmt.DebugSql())
@@ -38,32 +38,32 @@ func ListPoolDetail(ctx context.Context) ([]PoolDetail, error) {
 	return pools, nil
 }
 
-func CreatePool(ctx context.Context, pool model2.ZfsPool) (model2.ZfsPool, error) {
-	var newPool model2.ZfsPool
+func CreatePool(ctx context.Context, pool model.ZfsPool) (model.ZfsPool, error) {
+	var newPool model.ZfsPool
 
 	pool.CreatedAt = time.Now().UTC()
 	pool.UpdatedAt = time.Now().UTC()
 
-	stmt := table2.ZfsPool.
-		INSERT(table2.ZfsPool.AllColumns).
+	stmt := table.ZfsPool.
+		INSERT(table.ZfsPool.AllColumns).
 		MODEL(pool).
-		RETURNING(table2.ZfsPool.AllColumns)
+		RETURNING(table.ZfsPool.AllColumns)
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &newPool)
 	if err != nil {
 		log.Errorf("Can't insert pool: %s", err)
-		return model2.ZfsPool{}, err
+		return model.ZfsPool{}, err
 	}
 
 	return newPool, nil
 }
 
 func DeletePool(ctx context.Context, poolId int32) error {
-	stmt := table2.ZfsPool.
+	stmt := table.ZfsPool.
 		DELETE().
-		WHERE(table2.ZfsPool.ID.EQ(sqlite.Int32(poolId)))
+		WHERE(table.ZfsPool.ID.EQ(sqlite.Int32(poolId)))
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 

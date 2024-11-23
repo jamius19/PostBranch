@@ -3,17 +3,17 @@ package repo
 import (
 	"context"
 	"fmt"
-	db2 "github.com/jamius19/postbranch/internal/db"
+	"github.com/jamius19/postbranch/internal/db"
 	"github.com/jamius19/postbranch/internal/db/gen/model"
 	"github.com/jamius19/postbranch/internal/dto/repo"
 	"github.com/jamius19/postbranch/internal/runner"
-	pg2 "github.com/jamius19/postbranch/internal/service/pg"
-	util2 "github.com/jamius19/postbranch/internal/util"
+	"github.com/jamius19/postbranch/internal/service/pg"
+	"github.com/jamius19/postbranch/internal/util"
 	"path/filepath"
 )
 
-func CreateBranch(ctx context.Context, repoDetail db2.RepoDetail, branchInit repo.BranchInit) (model.Branch, error) {
-	parentBranch, err := db2.GetBranch(ctx, branchInit.ParentId)
+func CreateBranch(ctx context.Context, repoDetail db.RepoDetail, branchInit repo.BranchInit) (model.Branch, error) {
+	parentBranch, err := db.GetBranch(ctx, branchInit.ParentId)
 	if err != nil {
 		log.Error("Can't get parent branch: %s", err)
 		return model.Branch{}, err
@@ -52,7 +52,7 @@ func CreateBranch(ctx context.Context, repoDetail db2.RepoDetail, branchInit rep
 		return model.Branch{}, err
 	}
 
-	port, err := pg2.GetPgPort(ctx)
+	port, err := pg.GetPgPort(ctx)
 	if err != nil {
 		log.Errorf("Can't get pg port: %s", err)
 		return model.Branch{}, err
@@ -60,14 +60,14 @@ func CreateBranch(ctx context.Context, repoDetail db2.RepoDetail, branchInit rep
 
 	branch := model.Branch{
 		Name:     branchInit.Name,
-		Status:   string(db2.BranchOpen),
-		PgStatus: string(db2.BranchPgStarting),
+		Status:   string(db.BranchOpen),
+		PgStatus: string(db.BranchPgStarting),
 		PgPort:   port,
 		RepoID:   *repoDetail.Repo.ID,
 		ParentID: parentBranch.ID,
 	}
 
-	branch, err = db2.CreateBranch(ctx, branch)
+	branch, err = db.CreateBranch(ctx, branch)
 	if err != nil {
 		log.Errorf("Can't create branch: %s", err)
 		return model.Branch{}, err
@@ -79,17 +79,17 @@ func CreateBranch(ctx context.Context, repoDetail db2.RepoDetail, branchInit rep
 	return model.Branch{}, nil
 }
 
-func startBranchPg(repoDetail db2.RepoDetail, branch model.Branch) {
+func startBranchPg(repoDetail db.RepoDetail, branch model.Branch) {
 	datasetPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "data")
 	logPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs")
 
-	err := pg2.UpdatePostgresConfig(datasetPath, "port", util2.StringVal(branch.PgPort))
+	err := pg.UpdatePostgresConfig(datasetPath, "port", util.StringVal(branch.PgPort))
 	if err != nil {
 		log.Errorf("Can't update postgres port, branch: %s, err: %s", branch.Name, err)
 		return
 	}
 
-	err = pg2.UpdatePostgresConfig(
+	err = pg.UpdatePostgresConfig(
 		datasetPath,
 		"log_filename",
 		fmt.Sprintf("'%s_%s__%s.log'", repoDetail.Repo.Name, branch.Name, "%Y-%m-%d_%H-%M-%S"),
@@ -100,7 +100,7 @@ func startBranchPg(repoDetail db2.RepoDetail, branch model.Branch) {
 		return
 	}
 
-	err = pg2.UpdatePostgresConfig(
+	err = pg.UpdatePostgresConfig(
 		datasetPath,
 		"log_directory",
 		fmt.Sprintf("'%s'", logPath),
@@ -112,25 +112,25 @@ func startBranchPg(repoDetail db2.RepoDetail, branch model.Branch) {
 	}
 
 	logDirGlobPattern := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs", "*")
-	err = util2.RemoveGlob(logDirGlobPattern)
+	err = util.RemoveGlob(logDirGlobPattern)
 	if err != nil {
 		log.Errorf("Can't remove log files, branch: %s, err: %s", branch.Name, err)
 		return
 	}
 
-	err = pg2.CleanPidFile(datasetPath)
+	err = pg.CleanPidFile(datasetPath)
 	if err != nil {
 		log.Errorf("Can't clean pid file, branch: %s, err: %s", branch.Name, err)
 		return
 	}
 
-	status, err := pg2.StartPg(repoDetail.Pg.PgPath, repoDetail.Pool.MountPath, branch.Name)
+	status, err := pg.StartPg(repoDetail.Repo.PgPath, repoDetail.Pool.MountPath, branch.Name)
 	if err != nil {
 		log.Errorf("Can't start Postgres: %s", err)
 		return
 	}
 
-	err = db2.UpdateBranchPgStatus(context.Background(), *branch.ID, status)
+	err = db.UpdateBranchPgStatus(context.Background(), *branch.ID, status)
 	if err != nil {
 		log.Errorf("Can't update branch status: %s", err)
 		return

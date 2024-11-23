@@ -3,55 +3,60 @@ package repo
 import (
 	"context"
 	"fmt"
-	db2 "github.com/jamius19/postbranch/internal/db"
-	model2 "github.com/jamius19/postbranch/internal/db/gen/model"
+	"github.com/jamius19/postbranch/internal/db"
+	"github.com/jamius19/postbranch/internal/db/gen/model"
+	"github.com/jamius19/postbranch/internal/dto/pg"
 	repoDto "github.com/jamius19/postbranch/internal/dto/repo"
 	"github.com/jamius19/postbranch/internal/logger"
 	"github.com/jamius19/postbranch/internal/runner"
 	pgSvc "github.com/jamius19/postbranch/internal/service/pg"
-	zfs2 "github.com/jamius19/postbranch/internal/service/zfs"
+	"github.com/jamius19/postbranch/internal/service/zfs"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
 )
 
 var log = logger.Logger
 
-func InitializeRepo(ctx context.Context, repoInit repoDto.Info) (model2.Repo, model2.ZfsPool, error) {
+func InitializeRepo(ctx context.Context, repoInit repoDto.Info, pgInfo pg.Info) (model.Repo, model.ZfsPool, error) {
 	if repoInit.GetRepoType() == "virtual" {
 		log.Infof("Initializing virtual repo")
 
-		pool, err := zfs2.VirtualPool(ctx, repoInit)
+		pool, err := zfs.VirtualPool(ctx, repoInit)
 		if err != nil {
-			return model2.Repo{}, model2.ZfsPool{}, err
+			return model.Repo{}, model.ZfsPool{}, err
 		}
 
 		log.Infof("Initialized virtual pool. PoolInfo: %v", pool)
 
-		repoInfo := model2.Repo{
-			Name:   repoInit.GetName(),
-			PoolID: *pool.ID,
+		repoInfo := model.Repo{
+			Name:    repoInit.GetName(),
+			PoolID:  *pool.ID,
+			PgPath:  pgInfo.GetPgPath(),
+			Version: pgInfo.GetVersion(),
+			Status:  string(db.RepoStarted),
+			Adapter: string(pgInfo.GetAdapter()),
 		}
 
-		createdRepo, err := db2.CreateRepo(ctx, repoInfo)
+		createdRepo, err := db.CreateRepo(ctx, repoInfo)
 		if err != nil {
 			// TODO: Cleanup Pool and Dataset
 			log.Infof("Failed to insert repo. Name: %s Data: %v Error: %s", repoInit.GetName(), repoInfo, err)
-			return model2.Repo{}, model2.ZfsPool{}, responseerror.From("Failed to create repository")
+			return model.Repo{}, model.ZfsPool{}, responseerror.From("Failed to create repository")
 		}
 
 		return createdRepo, pool, nil
 	}
 
-	return model2.Repo{}, model2.ZfsPool{}, fmt.Errorf("not implemented yet")
+	return model.Repo{}, model.ZfsPool{}, fmt.Errorf("not implemented yet")
 }
 
-func DeleteRepo(ctx context.Context, repoDetail db2.RepoDetail) error {
+func DeleteRepo(ctx context.Context, repoDetail db.RepoDetail) error {
 	log.Infof("Deleting repo: %s, pool: %s", repoDetail.Repo.Name, repoDetail.Pool.Path)
 	pool := repoDetail.Pool
 
 	for _, branch := range repoDetail.Branches {
 		err := pgSvc.StopPg(
-			repoDetail.Pg.PgPath,
+			repoDetail.Repo.PgPath,
 			pool.MountPath,
 			branch.Name,
 			false,
@@ -62,7 +67,7 @@ func DeleteRepo(ctx context.Context, repoDetail db2.RepoDetail) error {
 		}
 	}
 
-	loopbackPath, err := zfs2.FindDevicePath(pool.Name)
+	loopbackPath, err := zfs.FindDevicePath(pool.Name)
 	if err != nil {
 		return err
 	}
@@ -76,7 +81,7 @@ func DeleteRepo(ctx context.Context, repoDetail db2.RepoDetail) error {
 	}
 
 	if pool.PoolType == "virtual" {
-		if err := zfs2.ReleaseLoopDevice(loopbackPath); err != nil {
+		if err := zfs.ReleaseLoopDevice(loopbackPath); err != nil {
 			return fmt.Errorf("failed to release loopback device: %s", err)
 		}
 
@@ -93,7 +98,7 @@ func DeleteRepo(ctx context.Context, repoDetail db2.RepoDetail) error {
 		return fmt.Errorf("failed to remove mount path: %w", err)
 	}
 
-	err = db2.DeletePool(ctx, *pool.ID)
+	err = db.DeletePool(ctx, *pool.ID)
 	if err != nil {
 		return err
 	}

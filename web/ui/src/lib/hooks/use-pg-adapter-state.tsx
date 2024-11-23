@@ -15,7 +15,7 @@ const usePgAdapterState = (adapter: PgAdapterName): UsePgAdapterStateReturnType 
     const {repoName} = useParams<{ repoName: string }>();
 
     const repoReimport = useNotifiableMutation({
-        mutationKey: ["pg-reimport"],
+        mutationKey: ["pg-adapter-reimport"],
         mutationFn: (pgConfig: PgAdapters) => reimport(pgConfig, repoName!, adapter),
         messages: {
             pending: "Starting Postgres import",

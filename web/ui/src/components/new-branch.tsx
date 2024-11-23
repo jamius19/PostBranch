@@ -6,7 +6,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import {Branch} from "@/@types/repo/repo-dto.ts";
+import {Branch} from "@/@types/repo/repo-response-dto.ts";
 import {Check, CopyPlus} from "lucide-react";
 import {Button} from "@/components/ui/button.tsx";
 import React, {useMemo, useState} from "react";

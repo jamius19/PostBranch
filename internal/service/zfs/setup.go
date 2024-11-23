@@ -2,7 +2,7 @@ package zfs
 
 import (
 	"fmt"
-	util2 "github.com/jamius19/postbranch/internal/util"
+	"github.com/jamius19/postbranch/internal/util"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,10 +29,10 @@ func findFreeLoopNo() (int, error) {
 }
 
 func CreateSparseFile(imgPath string, sizeInMb int64) error {
-	_, path := util2.SplitPath(imgPath)
+	_, path := util.SplitPath(imgPath)
 	log.Infof("Creating virtual disk file at %s", imgPath)
 
-	err := util2.CreateDirectories(path, "root", 0600)
+	err := util.CreateDirectories(path, "root", 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create directories for the sparse file. Error: %s", err)
 	}

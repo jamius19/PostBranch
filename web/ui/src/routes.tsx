@@ -4,7 +4,7 @@ import Layout from "./layout/layout.tsx";
 import Error from "./route/error/error.tsx";
 import Repo from "@/route/repo/repo.tsx";
 import RepoSetup from "@/route/repo/setup/repo-setup.tsx";
-import PgSetupHost from "@/route/repo/setup/pg/pg-setup-host.tsx";
+import PgSetupHost from "@/route/repo/setup/pg-adapter/pg-setup-host.tsx";
 import PgImportMode from "@/route/repo/setup/pg-import-mode.tsx";
 
 const router = createBrowserRouter([

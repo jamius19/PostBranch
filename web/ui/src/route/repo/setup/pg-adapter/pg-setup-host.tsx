@@ -73,7 +73,7 @@ const defaultValues: PgHostInitDto = {
 
 const PgSetupHost = (): JSX.Element => {
     const pgValidate = useNotifiableMutation({
-        mutationKey: ["pg-import"],
+        mutationKey: ["pg-adapter-import"],
         mutationFn: (pgInit: PgHostInitDto) => validatePg(pgInit, "host"),
         messages: {
             pending: "Checking Postgres configuration",

@@ -83,20 +83,20 @@ func Single(auth AuthInfo, query string) (string, error) {
 
 func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error) {
 	cleanup := func() {}
-	log.Debugf("Running query: %s", query)
+	log.Tracef("Running query: %s", query)
 
-	db, err := sql.Open("postgres", GetConnString(pgInit))
+	dbCon, err := sql.Open("postgres", GetConnString(pgInit))
 	if err != nil {
 		log.Errorf("Failed to open db: %v", err)
 		return nil, nil, cleanup, err
 	}
 
-	rows, err := db.Query(query)
+	rows, err := dbCon.Query(query)
 	if err != nil {
 		log.Errorf("Failed to run query: %s, error: %v", query, err)
 
-		if db != nil {
-			if err := db.Close(); err != nil {
+		if dbCon != nil {
+			if err := dbCon.Close(); err != nil {
 				log.Errorf("Failed to close db: %v", err)
 			}
 		}
@@ -105,8 +105,8 @@ func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error)
 	}
 
 	cleanup = func() {
-		if db != nil {
-			if err := db.Close(); err != nil {
+		if dbCon != nil {
+			if err := dbCon.Close(); err != nil {
 				log.Errorf("Failed to close db: %v", err)
 			}
 		}
@@ -117,7 +117,7 @@ func RunQuery(pgInit AuthInfo, query string) (*sql.DB, *sql.Rows, func(), error)
 			}
 		}
 	}
-	return db, rows, cleanup, err
+	return dbCon, rows, cleanup, err
 }
 
 func CreatePgPassFile(auth AuthInfo) error {

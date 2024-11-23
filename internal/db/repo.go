@@ -3,33 +3,41 @@ package db
 import (
 	"context"
 	"github.com/go-jet/jet/v2/sqlite"
-	model2 "github.com/jamius19/postbranch/internal/db/gen/model"
-	table2 "github.com/jamius19/postbranch/internal/db/gen/table"
+	"github.com/jamius19/postbranch/internal/db/gen/model"
+	"github.com/jamius19/postbranch/internal/db/gen/table"
 	"strings"
 	"time"
 )
 
+type RepoStatus string
+type RepoPgAdapter string
+
+const (
+	RepoStarted   RepoStatus = "STARTED"
+	RepoCompleted RepoStatus = "READY"
+	RepoFailed    RepoStatus = "FAILED"
+
+	HostAdapter RepoPgAdapter = "HOST"
+)
+
 type RepoDetail struct {
-	Repo     model2.Repo
-	Pool     model2.ZfsPool `alias:"pool"`
-	Pg       model2.Pg
-	Branches []model2.Branch `alias:"branches"`
+	Repo     model.Repo
+	Pool     model.ZfsPool  `alias:"pool"`
+	Branches []model.Branch `alias:"branches"`
 }
 
 func ListRepo(ctx context.Context) ([]RepoDetail, error) {
 	var repoDetailList []RepoDetail
 
 	stmt := sqlite.SELECT(
-		table2.Repo.AllColumns,
-		table2.ZfsPool.AllColumns.As("pool"),
-		table2.Pg.AllColumns,
-		table2.Branch.AllColumns.As("branches"),
+		table.Repo.AllColumns,
+		table.ZfsPool.AllColumns.As("pool"),
+		table.Branch.AllColumns.As("branches"),
 	).
-		FROM(table2.Repo.
-			INNER_JOIN(table2.ZfsPool, table2.Repo.PoolID.EQ(table2.ZfsPool.ID)).
-			INNER_JOIN(table2.Pg, table2.Pg.RepoID.EQ(table2.Repo.ID)).
-			LEFT_JOIN(table2.Branch, table2.Branch.RepoID.EQ(table2.Repo.ID))).
-		ORDER_BY(table2.Repo.CreatedAt.DESC())
+		FROM(table.Repo.
+			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
+		ORDER_BY(table.Repo.CreatedAt.DESC())
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
@@ -46,17 +54,15 @@ func GetRepo(ctx context.Context, repoId int64) (RepoDetail, error) {
 	var repoDetail RepoDetail
 
 	stmt := sqlite.SELECT(
-		table2.Repo.AllColumns,
-		table2.ZfsPool.AllColumns.As("pool"),
-		table2.Pg.AllColumns,
-		table2.Branch.AllColumns.As("branches"),
+		table.Repo.AllColumns,
+		table.ZfsPool.AllColumns.As("pool"),
+		table.Branch.AllColumns.As("branches"),
 	).
-		FROM(table2.Repo.
-			INNER_JOIN(table2.ZfsPool, table2.Repo.PoolID.EQ(table2.ZfsPool.ID)).
-			INNER_JOIN(table2.Pg, table2.Pg.RepoID.EQ(table2.Repo.ID)).
-			LEFT_JOIN(table2.Branch, table2.Branch.RepoID.EQ(table2.Repo.ID))).
-		WHERE(table2.Repo.ID.EQ(sqlite.Int(repoId))).
-		ORDER_BY(table2.Branch.CreatedAt.DESC())
+		FROM(table.Repo.
+			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
+		WHERE(table.Repo.ID.EQ(sqlite.Int(repoId))).
+		ORDER_BY(table.Branch.CreatedAt.DESC())
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
@@ -73,17 +79,15 @@ func GetRepoByName(ctx context.Context, repoName string) (RepoDetail, error) {
 	var repoDetail RepoDetail
 
 	stmt := sqlite.SELECT(
-		table2.Repo.AllColumns,
-		table2.ZfsPool.AllColumns.As("pool"),
-		table2.Pg.AllColumns,
-		table2.Branch.AllColumns.As("branches"),
+		table.Repo.AllColumns,
+		table.ZfsPool.AllColumns.As("pool"),
+		table.Branch.AllColumns.As("branches"),
 	).
-		FROM(table2.Repo.
-			INNER_JOIN(table2.ZfsPool, table2.Repo.PoolID.EQ(table2.ZfsPool.ID)).
-			INNER_JOIN(table2.Pg, table2.Pg.RepoID.EQ(table2.Repo.ID)).
-			LEFT_JOIN(table2.Branch, table2.Branch.RepoID.EQ(table2.Repo.ID))).
-		WHERE(table2.Repo.Name.EQ(sqlite.String(strings.TrimSpace(repoName)))).
-		ORDER_BY(table2.Branch.CreatedAt.DESC())
+		FROM(table.Repo.
+			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
+		WHERE(table.Repo.Name.EQ(sqlite.String(strings.TrimSpace(repoName)))).
+		ORDER_BY(table.Branch.CreatedAt.DESC())
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
@@ -96,30 +100,83 @@ func GetRepoByName(ctx context.Context, repoName string) (RepoDetail, error) {
 	return repoDetail, nil
 }
 
-func CreateRepo(ctx context.Context, repo model2.Repo) (model2.Repo, error) {
-	var newRepo model2.Repo
+func CreateRepo(ctx context.Context, repo model.Repo) (model.Repo, error) {
+	var newRepo model.Repo
 
 	repo.CreatedAt = time.Now().UTC()
 	repo.UpdatedAt = time.Now().UTC()
 
-	stmt := table2.Repo.INSERT(table2.Repo.Name, table2.Repo.PoolID).
-		VALUES(repo.Name, repo.PoolID).
-		RETURNING(table2.Repo.AllColumns)
+	stmt := table.Repo.INSERT(table.Repo.AllColumns).
+		MODEL(repo).
+		RETURNING(table.Repo.AllColumns)
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 
 	err := stmt.QueryContext(ctx, Db, &newRepo)
 	if err != nil {
 		log.Errorf("Can't create repo: %s", err)
-		return model2.Repo{}, err
+		return model.Repo{}, err
 	}
 
 	return newRepo, nil
 }
 
-func DeleteRepo(ctx context.Context, repoId int64) error {
-	stmt := table2.Repo.DELETE().
-		WHERE(table2.Repo.ID.EQ(sqlite.Int(repoId)))
+func UpdateRepoPg(ctx context.Context,
+	repoId int32,
+	pgPath string,
+	version int32,
+	adapter RepoPgAdapter,
+	status RepoStatus,
+) (model.Repo, error) {
+
+	var updatedRepo model.Repo
+
+	stmt := table.Repo.
+		UPDATE(table.Repo.PgPath, table.Repo.Version, table.Repo.Adapter, table.Repo.Status, table.Repo.UpdatedAt).
+		SET(
+			sqlite.String(pgPath),
+			sqlite.Int(int64(version)),
+			sqlite.String(string(adapter)),
+			sqlite.String(string(status)),
+			sqlite.CURRENT_TIMESTAMP(),
+		).
+		WHERE(table.Repo.ID.EQ(sqlite.Int(int64(repoId)))).
+		RETURNING(table.Repo.AllColumns)
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &updatedRepo)
+	if err != nil {
+		log.Errorf("Can't update repo: %s", err)
+		return model.Repo{}, err
+	}
+
+	return updatedRepo, nil
+}
+
+func UpdateRepoStatus(ctx context.Context, repoId int32, status RepoStatus, output string) (model.Repo, error) {
+	var repo model.Repo
+
+	stmt := table.Repo.
+		UPDATE(table.Repo.Status, table.Repo.Output, table.Repo.UpdatedAt).
+		SET(sqlite.String(string(status)), sqlite.String(output), sqlite.CURRENT_TIMESTAMP()).
+		WHERE(table.Repo.ID.EQ(sqlite.Int(int64(repoId)))).
+		RETURNING(table.Repo.AllColumns)
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &repo)
+	if err != nil {
+		log.Errorf("Can't update repo: %s", err)
+		return model.Repo{}, err
+	}
+
+	return repo, nil
+}
+
+func DeleteRepo(ctx context.Context, repoId int32) error {
+	stmt := table.Repo.DELETE().
+		WHERE(table.Repo.ID.EQ(sqlite.Int(int64(repoId))))
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 	_, err := stmt.ExecContext(ctx, Db)
@@ -136,12 +193,12 @@ func CountRepoByNameOrPath(ctx context.Context, repoName, repoPath string) (int6
 		Count int64
 	}
 
-	stmt := sqlite.SELECT(sqlite.COUNT(table2.Repo.Name).AS("count")).
-		FROM(table2.Repo.
-			INNER_JOIN(table2.ZfsPool, table2.Repo.PoolID.EQ(table2.ZfsPool.ID))).
+	stmt := sqlite.SELECT(sqlite.COUNT(table.Repo.Name).AS("count")).
+		FROM(table.Repo.
+			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID))).
 		WHERE(
-			table2.Repo.Name.EQ(sqlite.String(repoName)).
-				OR(table2.ZfsPool.Path.EQ(sqlite.String(repoPath))),
+			table.Repo.Name.EQ(sqlite.String(repoName)).
+				OR(table.ZfsPool.Path.EQ(sqlite.String(repoPath))),
 		)
 
 	log.Tracef("Query: %s", stmt.DebugSql())

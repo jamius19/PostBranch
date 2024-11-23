@@ -3,7 +3,7 @@ package zfs
 import (
 	"context"
 	"fmt"
-	db2 "github.com/jamius19/postbranch/internal/db"
+	"github.com/jamius19/postbranch/internal/db"
 	"github.com/jamius19/postbranch/internal/db/gen/model"
 	"github.com/jamius19/postbranch/internal/dto/repo"
 	"github.com/jamius19/postbranch/internal/logger"
@@ -69,7 +69,7 @@ func createPool(ctx context.Context, repoinit repo.Info, loopNo int) (model.ZfsP
 		PoolType:  repoinit.GetRepoType(),
 	}
 
-	pool, err := db2.CreatePool(ctx, poolData)
+	pool, err := db.CreatePool(ctx, poolData)
 	if err != nil {
 		// TODO: Cleanup Pool
 		log.Errorf("Failed to insert createPool. Repo:%v Path: %s Error:%s", poolData, devicePath, err)
@@ -82,7 +82,7 @@ func createPool(ctx context.Context, repoinit repo.Info, loopNo int) (model.ZfsP
 }
 
 func MountAll(ctx context.Context) error {
-	repoDetails, err := db2.ListRepo(ctx)
+	repoDetails, err := db.ListRepo(ctx)
 	if err != nil {
 		log.Errorf("Failed to list pools: %s", err)
 		return err
@@ -105,7 +105,7 @@ func MountAll(ctx context.Context) error {
 			poolWg.Add(1)
 
 			go pg.StopDangingPg(
-				repoDetail.Pg.PgPath,
+				repoDetail.Repo.PgPath,
 				repoDetail.Pool.MountPath,
 				branch.Name,
 				&poolWg,
@@ -155,7 +155,7 @@ func MountAll(ctx context.Context) error {
 
 			go pg.StartPgAndUpdateBranch(
 				ctx,
-				poolDetail.Pg.PgPath,
+				poolDetail.Repo.PgPath,
 				poolDetail.Pool.MountPath,
 				branch.Name,
 				*branch.ID,
@@ -222,7 +222,7 @@ func cleanDanglingLoopbackDevices(pool *model.ZfsPool) error {
 
 func UnmountAll() error {
 	log.Infof("Unmounting all pools")
-	repoDetials, err := db2.ListRepo(context.Background())
+	repoDetials, err := db.ListRepo(context.Background())
 
 	if err != nil {
 		log.Errorf("Failed to list repoDetials: %s", err)
@@ -244,7 +244,7 @@ func UnmountAll() error {
 
 			go pg.StopPgAndUpdateBranch(
 				ctx,
-				repoDetail.Pg.PgPath,
+				repoDetail.Repo.PgPath,
 				repoDetail.Pool.MountPath,
 				branch.Name,
 				*branch.ID,

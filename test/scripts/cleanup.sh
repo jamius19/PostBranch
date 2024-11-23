@@ -1,12 +1,14 @@
 #!/bin/bash
 
-# Step 1: Destroy all zpools
+# This script is useful for cleaning up the environment from any dangling loop devices/files
+
+# Step 1: Destroy all pools
 for pool in $(zpool list -Ho name); do
   echo "Destroying zpool: $pool"
   sudo zpool destroy "$pool"
 done
 
-# Step 2: Remove all loopback devices associated with /var/lib/post-branch/virtualdisk01.img
+# Step 2: Remove all loopback devices associated with /var/lib/post-branch/*
 for loop_dev in $(losetup -a | grep "post-branch" | awk -F: '{print $1}'); do
   echo "Detaching and removing loopback device: $loop_dev"
   sudo losetup -d "$loop_dev" && sudo rm "$loop_dev"

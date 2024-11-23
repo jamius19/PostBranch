@@ -2,6 +2,7 @@ package pg
 
 import (
 	"fmt"
+	"github.com/jamius19/postbranch/internal/db"
 )
 
 // HostImportReqDto This is used to perform some validations for postgres import
@@ -41,6 +42,18 @@ func (pgInit *HostImportReqDto) GetSslMode() string {
 
 func (pgInit *HostImportReqDto) IsHostConnection() bool {
 	return true
+}
+
+func (pgInit *HostImportReqDto) GetAdapter() db.RepoPgAdapter {
+	return db.HostAdapter
+}
+
+func (pgInit *HostImportReqDto) GetPgPath() string {
+	return pgInit.PostgresPath
+}
+
+func (pgInit *HostImportReqDto) GetVersion() int32 {
+	return pgInit.Version
 }
 
 func (pgInit *HostImportReqDto) String() string {

@@ -2,9 +2,6 @@ DELETE
 FROM zfs_pool;
 
 DELETE
-FROM pg;
-
-DELETE
 from repo;
 
 DELETE
