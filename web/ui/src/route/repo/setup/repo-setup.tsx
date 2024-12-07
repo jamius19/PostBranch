@@ -29,7 +29,7 @@ import {formatValue, getRandomInt} from "@/util/lib.ts";
 import React, {JSX, useCallback, useEffect, useMemo, useState} from "react";
 import {Link, Navigate, useLocation} from "react-router-dom";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
-import StorageSlider, {MIN_VALUE} from "@/components/storage-slider.tsx";
+import StorageSlider, {closestStep, MIN_VALUE} from "@/components/storage-slider.tsx";
 import {useAppForm} from "@/lib/hooks/use-app-form.ts";
 import {PgAdapterName, PgResponseDto} from "@/@types/repo/pg/pg-response-dto.ts";
 import {ChevronRightIcon} from "@radix-ui/react-icons";
@@ -71,7 +71,7 @@ const RepoSetup = (): JSX.Element => {
     const generatedName = generateName();
     const repoInitSuccess = repoInit.isSuccess;
     const repoInitPending = repoInit.isPending;
-    const repoSizeMinValue = repoSetupState.pgResponse!.clusterSizeInMb + MIN_VALUE;
+    const repoSizeMinValue = closestStep(repoSetupState.pgResponse!.clusterSizeInMb);
 
     const baseFormSchema = useMemo(() => z.object({
         name: z.string()
@@ -93,11 +93,13 @@ const RepoSetup = (): JSX.Element => {
                 "Repository with the same path already exists"),
     }), [reposQuery]);
 
+    const repoSizeMinValueValidation = repoSetupState.pgResponse!.clusterSizeInMb + MIN_VALUE;
+
     const virtualSchema = useMemo(() => z.object({
         repoType: z.literal("virtual"),
         sizeInMb: z.number({message: "Repository Size must be in the format (550MB, 3.5GB, 1TB)"})
-            .min(repoSizeMinValue, `Minimum allowed size is ${formatValue(repoSizeMinValue)}`)
-    }), [repoSizeMinValue]);
+            .min(repoSizeMinValueValidation, `Minimum allowed size is ${formatValue(repoSizeMinValueValidation)}`)
+    }), [repoSizeMinValueValidation]);
 
     const formSchema = useMemo(
         () => z.discriminatedUnion("repoType", [virtualSchema, blockSchema]).and(baseFormSchema),
@@ -285,7 +287,7 @@ const RepoSetup = (): JSX.Element => {
 
                         <p>
                             <b>Minimum required storage space to clone the database cluster
-                                is {formatValue(repoSizeMinValue)}</b>
+                                is {formatValue(repoSizeMinValueValidation)}</b>
                         </p>
                     </div>
 
@@ -295,8 +297,7 @@ const RepoSetup = (): JSX.Element => {
                                 formProps={{
                                     disabled: repoInitPending || repoInitSuccess,
                                     name: "sizeInMb",
-                                }}
-                                minSizeInMb={repoSetupState.pgResponse.clusterSizeInMb}/>
+                                }}/>
                         </div>
                     )}
 

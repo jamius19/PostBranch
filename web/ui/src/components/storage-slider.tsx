@@ -13,6 +13,18 @@ const STEPS = [
     131072, 262144, 524288, 786432, 1048576, 1572864, 2097152 // Larger steps after 100 GB
 ];
 
+export const closestStep = (val: number) => {
+    const minSize = val + MIN_VALUE;
+
+    for (let i = 0; i < STEPS.length - 1; i++) {
+        if (STEPS[i] >= minSize) {
+            return STEPS[i];
+        }
+    }
+
+    return minSize;
+}
+
 const UNIT_MULTIPLIERS = new Map<string, number>([
     ['M', 1,],
     ['G', 1024,],

@@ -1,14 +1,14 @@
 import {Navigate, useNavigate, useParams} from "react-router-dom";
-import React, {JSX, useMemo} from "react";
+import React, {JSX, useMemo, useState} from "react";
 import {formatValue} from "@/util/lib.ts";
 import {useQuery} from "@tanstack/react-query";
 import {deleteRepo, getRepo} from "@/service/repo-service.ts";
 import Spinner from "@/components/spinner.tsx";
 import {
     ArrowRight,
-    Box,
+    Box, Check,
     CircleCheck,
-    Clock2,
+    Clock2, CopyPlus,
     Database,
     GitBranch,
     HardDrive,
@@ -28,16 +28,23 @@ import {clsx} from "clsx";
 import {useNotifiableMutation} from "@/lib/hooks/use-notifiable-mutation.ts";
 import Link from "@/components/link.tsx";
 import {twMerge as tm} from "tailwind-merge";
-import {DialogFooter, DialogHeader, DialogTitle,} from "@/components/ui/dialog.tsx"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog.tsx"
 import {Badge} from "@/components/ui/badge.tsx";
 import CopyToClipboard from "@/components/copy-to-clipboard.tsx";
 import TooltipDialog from "@/components/tooltip-dialog.tsx";
-import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip.tsx";
 import NewBranch from "@/components/new-branch.tsx";
-
 
 const Repo = () => {
     const {repoName} = useParams<{ repoName: string }>();
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     if (!repoName) {
         throw new Error("Repo name is required");
@@ -115,13 +122,38 @@ const Repo = () => {
         <div>
             <div className={"flex mb-2.5 items-center gap-3 "}>
                 <h1 className={"mono"}>{repo.name}</h1>
-                <Button
-                    className={"relative top-[-3px] ml-auto text-gray-400 px-2 py-2 hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-md hover:shadow-red-500/40 transition-all duration-200"}
-                    variant={"ghost"}
-                    onClick={handleDelete}
-                    disabled={disableInteraction}>
-                    <Trash2/>
-                </Button>
+
+                <Dialog
+                    open={deleteModalOpen}
+                    onOpenChange={setDeleteModalOpen}>
+                    <DialogTrigger asChild>
+                        <Button
+                            className={"relative top-[-3px] ml-auto text-gray-400 px-2 py-2 hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-md hover:shadow-red-500/40 transition-all duration-200"}
+                            variant={"ghost"}
+                            disabled={disableInteraction}>
+                            <Trash2/>
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent showClose={false} className={"max-w-[500px]"}>
+                        <DialogHeader>
+                            <DialogTitle>Delete Repository</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete the repository?<br/>
+                                This action CANNOT be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant={"outline"} onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+                            <Button variant={"destructive"}
+                                    onClick={() => {
+                                        setDeleteModalOpen(false);
+                                        handleDelete();
+                                    }}>
+                                Delete
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
 
             <PgInfoBlock status={repo.status}/>
@@ -328,48 +360,34 @@ const BranchActions = (
                 </div>
             </TooltipDialog>
 
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger>
-                        <Link to={"/repos/" + repo.id + "/branches/" + branch.id}>
-                            <div
-                                className={"border border-gray-300 hover:border-gray-800 hover:bg-gray-800 transition-all duration-100 rounded px-1 py-1 text-gray-600 hover:text-white relative bottom-[1.5px]"}>
-                                <Wrench size={14}/>
-                            </div>
-                        </Link>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        Configure Branch Settings
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
+            {branch.name !== "main" && (
+                <TooltipDialog
+                    className={"hover:border-red-500 hover:bg-red-500"}
+                    tooltip={<p>Close <code>{branch.name}</code> branch</p>}
+                    icon={<X size={14}/>}>
 
-            <TooltipDialog
-                className={"hover:border-red-500 hover:bg-red-500"}
-                tooltip={<p>Close <code>{branch.name}</code> branch</p>}
-                icon={<X size={14}/>}>
+                    <DialogHeader>
+                        <DialogTitle>Close Branch</DialogTitle>
+                    </DialogHeader>
 
-                <DialogHeader>
-                    <DialogTitle>Close Branch</DialogTitle>
-                </DialogHeader>
+                    <div className={"text-sm text-gray-700"}>
+                        <p>
+                            Are you sure you want to close this branch?<br/>
+                            The postgres instance will be shut down and associated data will be deleted.
+                        </p>
 
-                <div className={"text-sm text-gray-700"}>
-                    <p>
-                        Are you sure you want to close this branch?<br/>
-                        The postgres instance will be shut down and associated data will be deleted.
-                    </p>
-
-                    <p className={"mt-3 font-bold"}>
-                        This action cannot be undone.
-                    </p>
-                </div>
-                <DialogFooter>
-                    <Button variant={"ghost"} size={"sm"}>Cancel</Button>
-                    <Button variant={"destructive"} size={"sm"}>
-                        Close Branch
-                    </Button>
-                </DialogFooter>
-            </TooltipDialog>
+                        <p className={"mt-3 font-bold"}>
+                            This action cannot be undone.
+                        </p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant={"ghost"} size={"sm"}>Cancel</Button>
+                        <Button variant={"destructive"} size={"sm"}>
+                            Close Branch
+                        </Button>
+                    </DialogFooter>
+                </TooltipDialog>
+            )}
 
         </div>
     );
