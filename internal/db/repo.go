@@ -29,15 +29,50 @@ type RepoDetail struct {
 func ListRepo(ctx context.Context) ([]RepoDetail, error) {
 	var repoDetailList []RepoDetail
 
-	stmt := sqlite.SELECT(
-		table.Repo.AllColumns,
-		table.ZfsPool.AllColumns.As("pool"),
-		table.Branch.AllColumns.As("branches"),
-	).
-		FROM(table.Repo.
-			INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
-			LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID))).
+	stmt := sqlite.
+		SELECT(
+			table.Repo.AllColumns,
+			table.ZfsPool.AllColumns.As("pool"),
+			table.Branch.AllColumns.As("branches"),
+		).
+		FROM(
+			table.Repo.
+				INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+				LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID)),
+		).
 		ORDER_BY(table.Repo.CreatedAt.DESC())
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &repoDetailList)
+	if err != nil {
+		log.Errorf("Can't query repos: %s", err)
+		return nil, err
+	}
+
+	return repoDetailList, nil
+}
+
+func ListRepoWithStatus(ctx context.Context, status ...RepoStatus) ([]RepoDetail, error) {
+	var repoDetailList []RepoDetail
+	var stringExpressions []sqlite.Expression
+	for _, status := range status {
+		stringExpressions = append(stringExpressions, sqlite.String(string(status)))
+	}
+
+	stmt := sqlite.
+		SELECT(
+			table.Repo.AllColumns,
+			table.ZfsPool.AllColumns.As("pool"),
+			table.Branch.AllColumns.As("branches"),
+		).
+		FROM(
+			table.Repo.
+				INNER_JOIN(table.ZfsPool, table.Repo.PoolID.EQ(table.ZfsPool.ID)).
+				LEFT_JOIN(table.Branch, table.Branch.RepoID.EQ(table.Repo.ID)),
+		).
+		ORDER_BY(table.Repo.CreatedAt.DESC()).
+		WHERE(table.Repo.Status.IN(stringExpressions...))
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 

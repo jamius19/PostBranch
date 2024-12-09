@@ -11,6 +11,7 @@ func routes(r *chi.Mux) {
 			r.Get("/", route.ListRepos)
 			r.Get("/{repoName}", route.GetRepo)
 			r.Post("/{repoName}/branch", route.CreateBranch)
+			r.Post("/{repoName}/branch/close", route.CloseBranch)
 
 			// Adapters for different pg sources
 			r.Route("/postgres/validate", func(r chi.Router) {

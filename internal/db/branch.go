@@ -44,6 +44,22 @@ func CreateBranch(ctx context.Context, branch model.Branch) (model.Branch, error
 	return newBranch, nil
 }
 
+func UpdateBranchStatus(ctx context.Context, branchId int32, status BranchStatus) error {
+	stmt := table.Branch.
+		UPDATE(table.Branch.Status, table.Branch.UpdatedAt).
+		SET(table.Branch.Status.SET(sqlite.String(string(status))), table.Branch.UpdatedAt.SET(sqlite.CURRENT_TIMESTAMP())).
+		WHERE(table.Branch.ID.EQ(sqlite.Int(int64(branchId))))
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+	_, err := stmt.ExecContext(ctx, Db)
+	if err != nil {
+		log.Errorf("Can't update branch pg status: %s", err)
+		return err
+	}
+
+	return nil
+}
+
 func UpdateBranchPgStatus(ctx context.Context, branchId int32, status BranchPgStatus) error {
 	stmt := table.Branch.
 		UPDATE(table.Branch.PgStatus, table.Branch.UpdatedAt).
@@ -77,11 +93,29 @@ func GetBranch(ctx context.Context, branchId int32) (model.Branch, error) {
 	return branch, nil
 }
 
+func GetBranchByName(ctx context.Context, branchName string) (model.Branch, error) {
+	var branch model.Branch
+	stmt := table.Branch.
+		SELECT(table.Branch.AllColumns).
+		WHERE(table.Branch.Name.EQ(sqlite.String(branchName)))
+
+	log.Tracef("Query: %s", stmt.DebugSql())
+
+	err := stmt.QueryContext(ctx, Db, &branch)
+	if err != nil {
+		log.Errorf("Can't get branch: %s", err)
+		return model.Branch{}, err
+	}
+
+	return branch, nil
+}
+
 func GetBranchPorts(ctx context.Context) ([]int32, error) {
 	var ports []int32
 
 	stmt := table.Branch.SELECT(table.Branch.PgPort).
-		FROM(table.Branch)
+		FROM(table.Branch).
+		WHERE(table.Branch.PgStatus.EQ(sqlite.String(string(BranchOpen))))
 
 	log.Tracef("Query: %s", stmt.DebugSql())
 

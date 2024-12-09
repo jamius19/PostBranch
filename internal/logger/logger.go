@@ -8,15 +8,15 @@ import (
 	"strings"
 )
 
-const logPathLen = 45
+const logPathLen = 40
 
 var Logger = &logrus.Logger{
 	Out: os.Stderr,
 	Formatter: &logrus.TextFormatter{
 		FullTimestamp: true,
 		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
-			filename := extractLogPath(f.File, "PostBranch/")
-			return "", fmt.Sprintf("[ %45s:%s ]", filename, getPaddedLineNumber(f.Line))
+			filename := getLogPath(f.File, "PostBranch/")
+			return "", fmt.Sprintf("[ %40s:%s ]", filename, getPaddedLineNumber(f.Line))
 		},
 	},
 	Hooks:        make(logrus.LevelHooks),
@@ -34,17 +34,19 @@ func getPaddedLineNumber(linenum int) string {
 	}
 }
 
-func extractLogPath(fullPath, prefix string) string {
+func getLogPath(fullPath, prefix string) string {
 	startIndex := strings.Index(fullPath, prefix)
+	var trimmedPath string
+
 	if startIndex == -1 {
-		return ""
+		trimmedPath = fullPath
+	} else {
+		trimmedPath = fullPath[startIndex+len(prefix):]
 	}
 
-	path := fullPath[startIndex+len(prefix):]
-
-	if len(path) > logPathLen {
-		path = "..." + path[len(path)-(logPathLen-3):]
+	if len(trimmedPath) > logPathLen {
+		trimmedPath = "..." + trimmedPath[len(trimmedPath)-(logPathLen-3):]
 	}
 
-	return path
+	return trimmedPath
 }

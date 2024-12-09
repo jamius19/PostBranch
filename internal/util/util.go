@@ -99,13 +99,13 @@ func StringVal[T ~int | ~int8 | ~int16 | ~int32 |
 }
 
 func PrintReadyBanner() {
-	log.Infof("")
-	log.Infof("")
-	log.Infof("*******************************************************")
-	log.Infof("*                                                     *")
-	log.Infof("*             PostBranch is ready to use!             *")
-	log.Infof("*                                                     *")
-	log.Infof("*******************************************************")
-	log.Infof("")
-	log.Infof("")
+	log.Print("")
+	log.Print("")
+	log.Print("*******************************************************")
+	log.Print("*                                                     *")
+	log.Print("*             PostBranch is ready to use!             *")
+	log.Print("*                                                     *")
+	log.Print("*******************************************************")
+	log.Print("")
+	log.Print("")
 }

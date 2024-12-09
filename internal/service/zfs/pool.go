@@ -11,6 +11,7 @@ import (
 	"github.com/jamius19/postbranch/internal/service/pg"
 	"github.com/jamius19/postbranch/web/responseerror"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -102,6 +103,10 @@ func MountAll(ctx context.Context) error {
 	log.Infof("Stopping potential dangling postgres instances")
 	for _, repoDetail := range repoDetails {
 		for _, branch := range repoDetail.Branches {
+			if branch.Status == string(db.BranchClosed) {
+				continue
+			}
+
 			poolWg.Add(1)
 
 			go pg.StopDangingPg(
@@ -115,14 +120,33 @@ func MountAll(ctx context.Context) error {
 
 	poolWg.Wait()
 
-	for _, poolDetail := range repoDetails {
-		if poolDetail.Pool.PoolType == "virtual" {
-			if err := setupLoopback(&poolDetail.Pool); err != nil {
-				failedPools = append(failedPools, poolDetail.Pool.Name)
-				log.Errorf("Failed to setup loopback for pool %v: %s", poolDetail.Pool, err)
+	for _, repoDetail := range repoDetails {
+		pool := repoDetail.Pool
+
+		if _, err := os.Stat(pool.Path); os.IsNotExist(err) {
+			failedPools = append(failedPools, pool.Name)
+
+			_, err := db.UpdateRepoStatus(ctx, *repoDetail.Repo.ID, db.RepoFailed, fmt.Sprintf("Pool file %s does not exist", pool.Path))
+			if err != nil {
+				log.Errorf("Failed to update repo status: %s", err)
+			}
+
+			log.Errorf("Pool file does not exist for pool %v: %s", pool, err)
+			continue
+		}
+
+		if pool.PoolType == "virtual" {
+			if err := setupLoopback(&pool); err != nil {
+				failedPools = append(failedPools, pool.Name)
+				log.Errorf("Failed to setup loopback for pool %v: %s", pool, err)
 			}
 		} else {
-			log.Infof("Pool is not virtual, skipping loopback setup. pool %v", poolDetail.Pool)
+			log.Infof("Pool is not virtual, skipping loopback setup. pool %v", repoDetail.Pool)
+		}
+
+		_, err := db.UpdateRepoStatus(ctx, *repoDetail.Repo.ID, db.RepoCompleted, "")
+		if err != nil {
+			log.Errorf("Failed to update repo status: %s", err)
 		}
 	}
 
@@ -130,15 +154,17 @@ func MountAll(ctx context.Context) error {
 		log.Errorf("Failed to setup loopback for the following pools: %v", failedPools)
 	}
 
-	log.Infof("**** Importing all pools. This is a time consuming operation. Please wait. ****")
+	if len(failedPools) < len(repoDetails) {
+		log.Infof("**** Importing all pools. This is a time consuming operation. Please wait. ****")
 
-	output, err := runner.Single("import-zpools", false, false, "zpool", "import", "-a")
-	if err != nil {
-		log.Errorf("Failed to import zpools: %s, output: %s", err, output)
-		return err
+		output, err := runner.Single("import-zpools", false, false, "zpool", "import", "-a")
+		if err != nil {
+			log.Errorf("Failed to import zpools: %s, output: %s", err, output)
+			return err
+		}
+
+		log.Infof("%d pool(s) are mounted.", len(repoDetails))
 	}
-
-	log.Infof("%d pool(s) are mounted.", len(repoDetails))
 
 	select {
 	case <-ctx.Done():
@@ -149,14 +175,22 @@ func MountAll(ctx context.Context) error {
 
 	log.Infof("**** Importing all databases. Please wait. ****")
 
-	for _, poolDetail := range repoDetails {
-		for _, branch := range poolDetail.Branches {
+	for _, repoDetail := range repoDetails {
+		if slices.Contains(failedPools, repoDetail.Repo.Name) {
+			continue
+		}
+
+		for _, branch := range repoDetail.Branches {
+			if branch.Status == string(db.BranchClosed) {
+				continue
+			}
+
 			poolWg.Add(1)
 
 			go pg.StartPgAndUpdateBranch(
 				ctx,
-				poolDetail.Repo.PgPath,
-				poolDetail.Pool.MountPath,
+				repoDetail.Repo.PgPath,
+				repoDetail.Pool.MountPath,
 				branch.Name,
 				*branch.ID,
 				&poolWg,
@@ -222,14 +256,14 @@ func cleanDanglingLoopbackDevices(pool *model.ZfsPool) error {
 
 func UnmountAll() error {
 	log.Infof("Unmounting all pools")
-	repoDetials, err := db.ListRepo(context.Background())
+	repoDetails, err := db.ListRepoWithStatus(context.Background(), db.RepoCompleted)
 
 	if err != nil {
-		log.Errorf("Failed to list repoDetials: %s", err)
+		log.Errorf("Failed to list repoDetails: %s", err)
 		return err
 	}
 
-	if len(repoDetials) == 0 {
+	if len(repoDetails) == 0 {
 		log.Info("No pools to unmount")
 		return nil
 	}
@@ -238,8 +272,12 @@ func UnmountAll() error {
 	var poolWg sync.WaitGroup
 	ctx := context.Background()
 
-	for _, repoDetail := range repoDetials {
+	for _, repoDetail := range repoDetails {
 		for _, branch := range repoDetail.Branches {
+			if branch.Status == string(db.BranchClosed) {
+				continue
+			}
+
 			poolWg.Add(1)
 
 			go pg.StopPgAndUpdateBranch(
@@ -257,7 +295,7 @@ func UnmountAll() error {
 	poolWg.Wait()
 	log.Infof("All databases are stopped")
 
-	for _, repoDetail := range repoDetials {
+	for _, repoDetail := range repoDetails {
 		if err := Unmount(repoDetail.Pool); err != nil {
 			log.Errorf("Failed to unmount pool: %v, error: %s", repoDetail.Pool, err)
 			return err

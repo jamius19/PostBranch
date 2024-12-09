@@ -79,6 +79,43 @@ func CreateBranch(ctx context.Context, repoDetail db.RepoDetail, branchInit repo
 	return model.Branch{}, nil
 }
 
+func CloseBranch(ctx context.Context, repoDetail db.RepoDetail, branchClose repo.BranchClose) error {
+	branch, err := db.GetBranchByName(ctx, branchClose.Name)
+	if err != nil {
+		log.Error("Can't get branch: %s", err)
+		return err
+	}
+
+	err = pg.StopPg(repoDetail.Repo.PgPath, repoDetail.Pool.MountPath, branch.Name, false)
+	if err != nil {
+		return err
+	}
+
+	branchDatasetName := fmt.Sprintf("%s/%s", repoDetail.Pool.Name, branch.Name)
+
+	_, err = runner.Single(
+		"delete-zfs-dataset",
+		false,
+		false,
+		"zfs",
+		"destroy",
+		"-r",
+		branchDatasetName,
+	)
+
+	if err != nil {
+		log.Errorf("Can't close branch: %s", err)
+		return err
+	}
+
+	err = db.UpdateBranchStatus(ctx, *branch.ID, db.BranchClosed)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func startBranchPg(repoDetail db.RepoDetail, branch model.Branch) {
 	datasetPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "data")
 	logPath := filepath.Join(repoDetail.Pool.MountPath, branch.Name, "logs")

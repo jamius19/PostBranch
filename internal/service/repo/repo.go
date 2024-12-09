@@ -54,6 +54,36 @@ func DeleteRepo(ctx context.Context, repoDetail db.RepoDetail) error {
 	log.Infof("Deleting repo: %s, pool: %s", repoDetail.Repo.Name, repoDetail.Pool.Path)
 	pool := repoDetail.Pool
 
+	if _, err := os.Stat(pool.Path); os.IsNotExist(err) {
+		log.Warnf("Pool file does not exist for pool %v: %s", pool, err)
+
+		log.Infof("Trying to stop pg instances, expect failure")
+		for _, branch := range repoDetail.Branches {
+			_ = pgSvc.StopPg(
+				repoDetail.Repo.PgPath,
+				pool.MountPath,
+				branch.Name,
+				false,
+			)
+		}
+
+		log.Infof("Trying to destroy pool %s anyway, expect failure", pool.Name)
+		_, err = runner.Single(
+			"zpool-destroy", false, false, "zpool", "destroy", "-f", pool.Name,
+		)
+
+		if err := os.RemoveAll(pool.MountPath); err != nil {
+			return fmt.Errorf("failed to remove mount path: %w", err)
+		}
+
+		err = db.DeletePool(ctx, *pool.ID)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	for _, branch := range repoDetail.Branches {
 		err := pgSvc.StopPg(
 			repoDetail.Repo.PgPath,

@@ -49,4 +49,3 @@ export const validatePg = async <T extends PgAdapters, >
 export const deleteRepo = async (repoName: string): Promise<ResponseDto<number>> => {
     return AxiosInstance.delete(`/api/repos/${repoName}`);
 }
-

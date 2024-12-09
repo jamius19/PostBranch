@@ -8,15 +8,13 @@ import {
     ArrowRight,
     Box, Check,
     CircleCheck,
-    Clock2, CopyPlus,
-    Database,
+    Clock2,
+    Database, Eye, EyeOff,
     GitBranch,
     HardDrive,
     Info,
     OctagonX,
-    Trash2,
     TriangleAlert,
-    Wrench,
     X
 } from "lucide-react";
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table.tsx";
@@ -31,7 +29,6 @@ import {twMerge as tm} from "tailwind-merge";
 import {
     Dialog,
     DialogContent,
-    DialogDescription,
     DialogFooter,
     DialogHeader,
     DialogTitle,
@@ -41,14 +38,18 @@ import {Badge} from "@/components/ui/badge.tsx";
 import CopyToClipboard from "@/components/copy-to-clipboard.tsx";
 import TooltipDialog from "@/components/tooltip-dialog.tsx";
 import NewBranch from "@/components/new-branch.tsx";
+import DeleteRepo from "@/components/delete-repo.tsx";
+import {closeBranch} from "@/service/branch-service.ts";
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from "@/components/ui/tooltip.tsx";
 
 const Repo = () => {
     const {repoName} = useParams<{ repoName: string }>();
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     if (!repoName) {
         throw new Error("Repo name is required");
     }
+
+    const [hideClosedBranches, setHideClosedBranches] = useState(false);
 
     const navigate = useNavigate();
     dayjs.extend(utc);
@@ -66,15 +67,32 @@ const Repo = () => {
         }
     });
 
+    const branchCloseQuery = useNotifiableMutation({
+        mutationKey: ["branch-close", repoName],
+        mutationFn: (branchName: string) => closeBranch(repoName, {name: branchName}),
+        invalidates: ["repo"],
+        messages: {
+            pending: "Closing branch",
+            success: "Branch closed successfully."
+        },
+        onSuccess: () => {
+            branchCloseQuery.reset();
+        }
+    });
+
     const repoQuery = useQuery({
         queryKey: ["repo", repoName],
         queryFn: () => getRepo(repoName),
-        refetchInterval: 2000,
+        refetchInterval: 1000,
         enabled: !repoDeleteQuery.isPending && !repoDeleteQuery.isSuccess,
     });
 
     const handleDelete = () => {
         repoDeleteQuery.mutate(repoName);
+    }
+
+    const handleCloseBranch = (branchName: string) => {
+        branchCloseQuery.mutate(branchName);
     }
 
     const repo = repoQuery.data?.data;
@@ -123,37 +141,7 @@ const Repo = () => {
             <div className={"flex mb-2.5 items-center gap-3 "}>
                 <h1 className={"mono"}>{repo.name}</h1>
 
-                <Dialog
-                    open={deleteModalOpen}
-                    onOpenChange={setDeleteModalOpen}>
-                    <DialogTrigger asChild>
-                        <Button
-                            className={"relative top-[-3px] ml-auto text-gray-400 px-2 py-2 hover:bg-red-600 hover:text-white hover:border-red-600 hover:shadow-md hover:shadow-red-500/40 transition-all duration-200"}
-                            variant={"ghost"}
-                            disabled={disableInteraction}>
-                            <Trash2/>
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent showClose={false} className={"max-w-[500px]"}>
-                        <DialogHeader>
-                            <DialogTitle>Delete Repository</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to delete the repository?<br/>
-                                This action CANNOT be undone.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <Button variant={"outline"} onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
-                            <Button variant={"destructive"}
-                                    onClick={() => {
-                                        setDeleteModalOpen(false);
-                                        handleDelete();
-                                    }}>
-                                Delete
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <DeleteRepo onDelete={handleDelete}/>
             </div>
 
             <PgInfoBlock status={repo.status}/>
@@ -187,7 +175,29 @@ const Repo = () => {
                         <GitBranch size={22} className={"relative top-[-5.5px]"}/>
                         <h1>Branches</h1>
 
-                        <div className={"relative bottom-0.5 ml-auto"}>
+                        <div className={"relative flex items-center gap-3 bottom-0.5 ml-auto"}>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        {hideClosedBranches ? (
+                                            <Eye
+                                                className={"text-gray-400 cursor-pointer hover:text-gray-600 transition-all duration-200"}
+                                                size={18}
+                                                onClick={() => setHideClosedBranches(prevState => !prevState)}/>
+                                        ) : (
+                                            <EyeOff
+                                                className={"text-gray-400 cursor-pointer hover:text-gray-600 transition-all duration-200"}
+                                                size={18}
+                                                onClick={() => setHideClosedBranches(prevState => !prevState)}/>
+                                        )}
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Show/Hide inactive branches</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+
+
                             <NewBranch repoName={repo.name} branches={repo.branches} branchMap={branchMap}/>
                         </div>
                     </div>
@@ -204,38 +214,68 @@ const Repo = () => {
                         </TableHeader>
 
                         <TableBody>
-                            {repo.branches.length !== 0 ? repo.branches.map((branch) => (
-                                <TableRow key={branch.id}>
-                                    <TableCell className="font-medium w-[200px] flex">
-                                        <span>{branch.name}</span>
-                                        {branch.name === "main" && (
-                                            <Badge
-                                                className={"ml-2 opacity-80 rounded-full"}
-                                                variant={"info"}
-                                                size={"sm"}>
-                                                Primary
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <BranchActions repo={repo} branch={branch}/>
-                                    </TableCell>
-                                    <TableCell className={"w-[100px]"}>{branch.port}</TableCell>
-                                    <TableCell className={"w-[150px]"}>
-                                        <BranchPgStatusBadge status={branch.pgStatus}/>
-                                    </TableCell>
-                                    <TableCell
-                                        className={"w-[200px]"}>
-                                        {getParentBranchName(branch.parentId)}
-                                    </TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={5} className={"text-center text-muted-foreground/80"}>
-                                        No branches found
-                                    </TableCell>
-                                </TableRow>
-                            )}
+                            {repo.branches.length !== 0 ?
+                                repo.branches
+                                    .filter((branch) => getBranchDisplayStatus(branch, hideClosedBranches))
+                                    .map((branch) => (
+                                        <TableRow key={branch.id}>
+                                            <TableCell className="font-medium w-[200px] flex">
+                                                <span>{branch.name}</span>
+                                                {branch.name === "main" && (
+                                                    <Badge
+                                                        className={"ml-2 opacity-80 rounded-full"}
+                                                        variant={"info"}
+                                                        size={"sm"}>
+                                                        Primary
+                                                    </Badge>
+                                                )}
+
+                                                {branch.status === "CLOSED" && (
+                                                    <Badge
+                                                        className={"ml-2 opacity-80 rounded-full"}
+                                                        variant={"destructive"}
+                                                        size={"sm"}>
+                                                        Closed
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                {branch.status === "OPEN" ? (
+                                                    <BranchActions
+                                                        repo={repo}
+                                                        branch={branch}
+                                                        handleClose={handleCloseBranch}
+                                                        closeStatus={branchCloseQuery.status}/>
+                                                ) : (
+                                                    "—"
+                                                )}
+                                            </TableCell>
+                                            <TableCell className={"w-[100px]"}>
+                                                {branch.status === "OPEN" ? (
+                                                    <>{branch.port}</>
+                                                ) : (
+                                                    "—"
+                                                )}
+                                            </TableCell>
+                                            <TableCell className={"w-[150px]"}>
+                                                {branch.status === "OPEN" ? (
+                                                    <BranchPgStatusBadge status={branch.pgStatus}/>
+                                                ) : (
+                                                    "—"
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                className={"w-[200px]"}>
+                                                {getParentBranchName(branch.parentId)}
+                                            </TableCell>
+                                        </TableRow>
+                                    )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className={"text-center text-muted-foreground/80"}>
+                                            No branches found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                         </TableBody>
                     </Table>
                 </div>
@@ -314,8 +354,16 @@ const PgInfoBlock = ({status}: { status?: RepoStatus }): JSX.Element => {
 }
 
 const BranchActions = (
-    {repo, branch}: { repo: RepoResponseDto, branch: Branch }
+    {repo, branch, handleClose, closeStatus}:
+    {
+        repo: RepoResponseDto,
+        branch: Branch,
+        handleClose: (name: string) => void,
+        closeStatus: "pending" | "success" | "error" | "idle",
+    }
 ): JSX.Element => {
+
+    const [open, setOpen] = useState(false);
 
     return (
         <div className={"flex gap-1"}>
@@ -361,32 +409,66 @@ const BranchActions = (
             </TooltipDialog>
 
             {branch.name !== "main" && (
-                <TooltipDialog
-                    className={"hover:border-red-500 hover:bg-red-500"}
-                    tooltip={<p>Close <code>{branch.name}</code> branch</p>}
-                    icon={<X size={14}/>}>
+                <TooltipProvider>
+                    <Dialog
+                        modal={true}
+                        onOpenChange={closeStatus === "pending" ? undefined : setOpen}
+                        open={open}>
 
-                    <DialogHeader>
-                        <DialogTitle>Close Branch</DialogTitle>
-                    </DialogHeader>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <DialogTrigger asChild>
+                                    <div
+                                        className={"border border-gray-300 hover:border-red-500 hover:bg-red-500 transition-all duration-100 rounded px-1 py-1 text-gray-600 hover:text-white relative bottom-[1.5px] cursor-pointer"}>
+                                        <X size={14}/>
+                                    </div>
+                                </DialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Close <code>{branch.name}</code> branch</p>
+                            </TooltipContent>
+                        </Tooltip>
 
-                    <div className={"text-sm text-gray-700"}>
-                        <p>
-                            Are you sure you want to close this branch?<br/>
-                            The postgres instance will be shut down and associated data will be deleted.
-                        </p>
+                        <DialogContent
+                            className={"w-[1000px]"}
+                            showClose={false}>
 
-                        <p className={"mt-3 font-bold"}>
-                            This action cannot be undone.
-                        </p>
-                    </div>
-                    <DialogFooter>
-                        <Button variant={"ghost"} size={"sm"}>Cancel</Button>
-                        <Button variant={"destructive"} size={"sm"}>
-                            Close Branch
-                        </Button>
-                    </DialogFooter>
-                </TooltipDialog>
+                            <DialogHeader>
+                                <DialogTitle>Close Branch</DialogTitle>
+                            </DialogHeader>
+
+                            <div className={"text-sm text-gray-700"}>
+                                <p>
+                                    Are you sure you want to close this branch?<br/>
+                                    The postgres instance will be shut down and associated data will be deleted.
+                                </p>
+
+                                <p className={"mt-3 font-bold"}>
+                                    This action cannot be undone.
+                                </p>
+                            </div>
+                            <DialogFooter>
+                                <Button
+                                    variant={"ghost"}
+                                    size={"sm"}
+                                    disabled={closeStatus === "pending"}
+                                    onClick={() => setOpen(false)}>
+                                    Cancel
+                                </Button>
+
+                                <Button variant={"destructive"}
+                                        size={"sm"}
+                                        onClick={() => handleClose(branch.name)}
+                                        disabled={closeStatus === "pending"}>
+
+                                    <Spinner isLoading={closeStatus === "pending"} light/>
+                                    {closeStatus === "success" && <Check/>}
+                                    {closeStatus === "success" ? "Branch Closed" : "Close Branch"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </TooltipProvider>
             )}
 
         </div>
@@ -426,6 +508,16 @@ const BranchPgStatusBadge = (
             {status}
         </div>
     )
+}
+
+const getBranchDisplayStatus = (branch: Branch, hideClosedBranches: boolean): boolean => {
+    if (hideClosedBranches) {
+        if (branch.status === "CLOSED") {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 export default Repo;

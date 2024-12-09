@@ -72,3 +72,66 @@ func CreateBranch(w http.ResponseWriter, r *http.Request) {
 
 	util.WriteResponse(w, r, response, http.StatusOK)
 }
+
+func CloseBranch(w http.ResponseWriter, r *http.Request) {
+	repoName := chi.URLParam(r, "repoName")
+	if repoName == "" {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Repository Name is required"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	var branchClose repo.BranchClose
+	if err := json.NewDecoder(r.Body).Decode(&branchClose); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	if err := validation.Validate(branchClose); err != nil {
+		util.WriteError(w, r, err, http.StatusBadRequest)
+		return
+	}
+
+	if branchClose.Name == "main" {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Cannot close main branch"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	repoDetail, err := db.GetRepoByName(r.Context(), repoName)
+	if err != nil {
+		log.Error("Failed to load repo, Invalid Repository Name: %s", repoName)
+
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Invalid Repository Name"),
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	err = repoSvc.CloseBranch(r.Context(), repoDetail, branchClose)
+	if err != nil {
+		util.WriteError(
+			w,
+			r,
+			responseerror.From("Failed to close branch"),
+			http.StatusBadRequest,
+		)
+
+		return
+	}
+
+	return
+}
